@@ -1,4 +1,4 @@
-# HDDP Switch
+# eHDDP Switch
 ## Before building
 The switch makes use of the NetBee library to parse packets, so we need to install it first.
 
@@ -94,9 +94,9 @@ Please submit your bug reports, fixes and suggestions as pull requests on
 GitHub, or by contacting us directly.
 
 # License
-HDDP Switch is released under the GPLv3 license. 
+eHDDP Switch is released under the GPLv3 license. 
 
-This file is part of the HDDP Switch distribution (https://github.com/gistnetserv-uah/HDDP).
+This file is part of the HDDP Switch distribution (https://github.com/gistnetserv-uah/eHDDP).
 Copyright (c) 2020.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by  the Free Software Foundation, version 3.
