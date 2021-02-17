@@ -1,5 +1,12 @@
 # eHDDP
-enhanced Hybrid Domain Discovery Protocol
+enhanced Hybrid Domain Discovery Protocol 
+Copyright (C) 2020 Joaquín Álvarez-Horcajo(1), Isaias Martinez-Yelmo(1), Juan Antonio-Carral (1) and Diego Lopez-Pajares;
+
+
+                     (1) GIST, University of Alcala, Spain.
+                     
+                     (2) Polytechnic University of Madrid, Spain.
+
 
 This repository is made up of the following elements:
 
