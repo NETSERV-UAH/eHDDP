@@ -904,7 +904,7 @@ class hddp_sniffer:
                                                 continue
                                 try: 
                                     if self.message_queues.has_key(interface_writable):
-                                        self.message_queues.pop(interface_writable,None)
+                                        self.message_queues.pop(interface_writable,None) 
                                     
                                     if interface_writable in self.outputs:
                                         self.outputs.remove(interface_writable)
