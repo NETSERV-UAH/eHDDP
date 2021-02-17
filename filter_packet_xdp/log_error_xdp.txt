@@ -1,0 +1,3 @@
+libbpf: Kernel error message: underlying driver does not support XDP in native mode
+ERR: ifindex(7) link set xdp fd failed (95): Operation not supported
+Hint: Native-XDP not supported use --skb-mode or --auto-mode
