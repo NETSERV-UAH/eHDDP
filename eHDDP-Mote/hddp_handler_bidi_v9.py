@@ -57,7 +57,7 @@ class hddp_sniffer:
                 self.timeout = TIMER_WITHOUT_PKT
                 self.resend_time = 300 #(ms)
                 self.Id_onos = -1
-                self.mac_propia = []
+                self.mac_myself = []
                 self.interface_name = []
                 self.ID_Propia = []
                 self.block_table = {"mac_src": [], "mac_ant":[], "timestamp": 0, "Num_Sec": 0, "interfaz_salida":""}
@@ -86,7 +86,7 @@ class hddp_sniffer:
                 self.log_activo = True
                 self.nodo_mixto = False
                 self.estado = int(0)
-                self.distancia_sdn = int(0)
+                self.distance_sdn = int(0)
                         
    
         def insert_interfaces(self, interface_name, mac_interface):
@@ -97,7 +97,7 @@ class hddp_sniffer:
 
                 #datos
                 self.interface_name.append(interface_name)
-                self.mac_propia.append(mac_interface)
+                self.mac_myself.append(mac_interface)
                 self.ID_Propia.append(self.mac_to_int(mac_interface))  
                 if (self.Id_onos > self.mac_to_int(mac_interface) or self.Id_onos == -1):
                         self.Id_onos = self.mac_to_int(mac_interface)
@@ -150,9 +150,9 @@ class hddp_sniffer:
                                 mac += ":"
                 return mac
 
-        def mac_interfaz(self, interfaz):
+        def mac_interface(self, interfaz):
                 try:
-                        return self.mac_propia[self.inputs.index(interfaz)]
+                        return self.mac_myself[self.inputs.index(interfaz)]
                 except:
                         return -1;
        
@@ -178,11 +178,11 @@ class hddp_sniffer:
                 try:
                         str_mac = self.struc_to_mac(mac)
                         if (str_mac == 'ff:ff:ff:ff:ff:ff'):
-                            #leemos las ID del paquete de entrada
+                            
                             configuration, types, ids_pkt, inports, outports = self.read_data_devices(pkt, hddp_fix_len, num_devices-1)
                             if (len(ids_pkt) <= 1):
-                                return 1; #como solo tenemos un dispositivo puedo reenviarlo sin problemas
-                            if (ids_pkt[len(ids_pkt)-1] == self.Id_onos): #es raro pero parece ser que puede haber paquetes que me lleguen siendo mios
+                                return 1; 
+                            if (ids_pkt[len(ids_pkt)-1] == self.Id_onos): 
                                 return -1
                             elif ((ids_pkt.count(self.Id_onos) == 0) or 
                                 (ids_pkt.count(self.Id_onos) < self.num_veces_repetido) or 
@@ -191,8 +191,8 @@ class hddp_sniffer:
                                 return 1;
                             else:
                                 return -1;
-                        for pos in range (0, len(self.mac_propia)):
-                            if (str_mac == self.mac_propia[pos]):
+                        for pos in range (0, len(self.mac_myself)):
+                            if (str_mac == self.mac_myself[pos]):
                                 return 1;
                         return -1;
                 except:
@@ -200,7 +200,7 @@ class hddp_sniffer:
 
 
         def make_header_hppd_fixed(self, eth_header, hddp_header):
-                #varibales para pasarle a la funcion de struct.pack
+                
                 eth_type = [hex(eth_header["eth_type"] >> i & 0xff) for i in (8,0)]
                 Version = [hex(hddp_header["Version"] & 0xff)]
                 Opcode = [hex(hddp_header["OpCode"] & 0xff)]
@@ -209,8 +209,6 @@ class hddp_sniffer:
                 mac_size = [hex(hddp_header["mac_size"] & 0xff)]
                 Num_Ack = [hex(int(hddp_header["Num_Ack"] >> i & 0xff)) for i in (56,48,40,32,24,16,8,0)]
                 Time_Block = [hex(hddp_header["Time_Block"] >> i & 0xff) for i in (24,16,8,0)]
-
-                #print str(eth_header["mac_dst"])+" "+str(eth_header["mac_src"])+" "+str(eth_type)+" "+str(Opcode)+" "+str(Num_hops)+" "+str(Time_Block)+" "+str(Num_Sec)+" "+str(hddp_header["mac_sig"])
 
                 pkt = struct.pack("!6B6B2B",
                         int(bytes(eth_header["mac_dst"][0]),16), int(bytes(eth_header["mac_dst"][1]),16), int(bytes(eth_header["mac_dst"][2]),16),
@@ -262,7 +260,7 @@ class hddp_sniffer:
                 configuration.append(int(struct.unpack("!B", 
                     pkt[int(hddp_fix_len)+i*(size_type_dev + size_id_mac + 2 * size_port) + i :
                         int(hddp_fix_len)+i*(size_type_dev + size_id_mac + 2 * size_port) + i + 1 ])[0]))
-                #obtenemos los valores de lectura
+               
                 size_type_dev = int((configuration[i] & 0b11000000) >> 6) + 1 
                 size_id_mac = int((configuration[i] & 0b00111000) >> 3 ) + 1
                 size_port = int((configuration[i] & 0b00000110) >> 1) + 1
@@ -295,8 +293,8 @@ class hddp_sniffer:
         def read_all_data_packet(self, pkt, hddp_packet, eth_header, hddp_header, New_packet, num_ack, num_datos = NUM_DEVICES):
                 position = 0
                 if (New_packet == HDDP_NEW and num_ack == 0):
-                        #iniciamos la configuracion para que luego se lea correctamente
-                        config_propia = bin(int(SIZE_TYPE_DEV-1) << 6 | int(SIZE_ID_MAC-1) << 3 | int (SIZE_PORT -1) << 1 | int (1))
+                        
+                        config_myself = bin(int(SIZE_TYPE_DEV-1) << 6 | int(SIZE_ID_MAC-1) << 3 | int (SIZE_PORT -1) << 1 | int (1))
                         configurations = []
                         types = []
                         id_devices = []
@@ -310,37 +308,35 @@ class hddp_sniffer:
                         id_devices = self.reply_waiting_ack[num_ack]["id_devices"][0:num_datos]
                         inports = self.reply_waiting_ack[num_ack]["inports"][0:num_datos]
                         outports = self.reply_waiting_ack[num_ack]["outports"][0:num_datos]
-                        position = num_datos - 1 #int(hddp_header["Num_hops"])-1
+                        position = num_datos - 1 
 
                 else:
                         configurations, types, id_devices, inports, outports = self.read_data_devices(pkt, len(hddp_packet), num_datos)
-                        position = num_datos - 1 #int(hddp_header["Num_hops"])-1
+                        position = num_datos - 1 
                 
                 return types, id_devices, inports, outports, configurations, position
                 
 
         def create_hddp_packet(self, pkt, eth_header, hddp_header, New_packet, entry_interface, out_interface, link_bidi, num_ack = 0):
-                #modificamos la cabecera con nuestros datos
-                hddp_header["last_mac"] = str(self.mac_interfaz(out_interface)).split(":") #meto mi mac para decir al resto que este bcast viene de mi
-                eth_header["mac_src"] = str(self.mac_interfaz(out_interface)).split(":"); #str(self.mac_propia[0]).split(":");
+                
+                hddp_header["last_mac"] = str(self.mac_interface(out_interface)).split(":") 
+                eth_header["mac_src"] = str(self.mac_interface(out_interface)).split(":"); 
 
                 hddp_packet = self.make_header_hppd_fixed(eth_header, hddp_header)
                 types, id_devices, inports, outports, configurations, position = self.read_all_data_packet( 
                         pkt, hddp_packet, eth_header, hddp_header, New_packet, num_ack, hddp_header['Num_hops'] - 1 )
 
-                #serializamos el paquete
+                
                 types.append(self.type_device)
-                id_devices.append(self.Id_onos) #siempre la primera que la vamos a usar como principal
+                id_devices.append(self.Id_onos) 
                 inports.append(self.num_interfaz(entry_interface))
                 outports.append(self.num_interfaz(out_interface))
-                config_propia = bin(int(SIZE_TYPE_DEV-1) << 6 | int(SIZE_ID_MAC-1) << 3 | int (SIZE_PORT -1) << 1 | int (link_bidi))
-                configurations.append(int(config_propia,2)) #por defecto es bidireccional, pero puede cambiar
-
-                #hddp_header['Num_hops'] += int (1) #amplimos el numero de hops en 1 ya que hemos metido nuestra informacion
+                config_myself = bin(int(SIZE_TYPE_DEV-1) << 6 | int(SIZE_ID_MAC-1) << 3 | int (SIZE_PORT -1) << 1 | int (link_bidi))
+                configurations.append(int(config_myself,2)) 
 
                 for i in range (0, hddp_header['Num_hops']):
                     hddp_packet +=  self.serialize_datas(configurations[i],"B") 
-                    # Obtenemos los bytes que necesitamos
+                    
                     size_type_dev = int((configurations[i] & 0b11000000) >> 6) + 1 
                     size_id_mac = int((configurations[i] & 0b00111000) >> 3 ) + 1
                     size_port = int((configurations[i] & 0b00000110) >> 1) + 1
@@ -362,10 +358,9 @@ class hddp_sniffer:
                 outports_request = outports[position]
                 inports_request = outports_request
 
-                if (id_devices_request == 0): #si la lectura no es correcta tiro el paquete
+                if (id_devices_request == 0):
                         return;
 
-                #aumentamos en 1 el estado por guardar el reply
                 self.estado += int(1)
 
                 self.reply_waiting_ack[hddp_header["Num_Ack"]] = {}
@@ -385,25 +380,25 @@ class hddp_sniffer:
                 self.reply_waiting_ack[hddp_header["Num_Ack"]]["time_send"] = time.time()*1000
                 self.reply_waiting_ack[hddp_header["Num_Ack"]]["entry_interface"] = entry_interface
 
-                #cambiamos el temporizador para estar enviar en cuanto podamos
+                
                 self.timeout = TIMER_WITH_PKT
 
-        def eliminar_reenvio_request_por_reply(self, hddp_header):
+        def remove_resend_request_by_reply(self, hddp_header):
             if NUM_RESEND > 0 and len(self.request_waiting_reply) > 0:
                 if ((self.request_waiting_reply.has_key(hddp_header["Num_Sec"])) and 
                     (self.block_table["Num_Sec"] > hddp_header["Num_Sec"] or self.block_table["mac_ant"] != hddp_header["last_mac"])):
                         self.request_waiting_reply.pop(hddp_header["Num_Sec"], None)
                         if (self.request_resent.has_key(hddp_header["Num_Sec"])):
                             self.request_resent.pop(hddp_header["Num_Sec"], None)
-                        #comprobamos si tenemos que volver el timer de busqueda a su tiempo
+                        
                         if len(self.reply_waiting_ack) == 0 and len(self.request_waiting_reply) == 0:
-                            #volvemos al estado tranquilo
+                            
                             self.timeout = TIMER_WITHOUT_PKT
             return
 
-        def limpieza_paquetes_a_reenviar(self, hddp_header):
+        def clean_pkt_to_resend(self, hddp_header):
             if NUM_RESEND > 0 and len(self.request_waiting_reply) > 0:
-                #limpiamos lista de request a reenviar para evitar colas excesivas
+                
                 keys_request_waiting_reply = self.request_waiting_reply.keys() 
                 for num_sequece_resend_request in keys_request_waiting_reply:
                     if (num_sequece_resend_request < int(hddp_header["Num_Sec"])):
@@ -418,14 +413,14 @@ class hddp_sniffer:
                     if int(self.reply_waiting_ack[resend_reply]["time_send"]/1000) < int(hddp_header["Num_Sec"]):
                         self.reply_waiting_ack.pop(resend_reply, None);
                 
-                #dejamos tiempo como siempre
+                
                 if len(self.reply_waiting_ack) == 0 and len(self.request_waiting_reply) == 0:
                     self.timeout = TIMER_WITHOUT_PKT
             return
 
-        def guardar_request_para_reenvio(self, timer, hddp_header, interface, hddp_packet_request, tipo):
+        def save_request_to_resend(self, timer, hddp_header, interface, hddp_packet_request, tipo):
             if (NUM_RESEND > 0): 
-                #aumentamos en 1 el estado por guardar el request
+                
                 self.estado += int(1)                        
                 if not self.request_waiting_reply.has_key(hddp_header["Num_Sec"]):
                     self.request_waiting_reply[hddp_header["Num_Sec"]]= {}
@@ -441,23 +436,23 @@ class hddp_sniffer:
                 mac_ant = hddp_header["mac_sig"];
                 mac_src = eth_header["mac_src"];
 
-                self.limpieza_paquetes_a_reenviar(hddp_header);
+                self.clean_pkt_to_resend(hddp_header);
                 
                 if (int(hddp_header["Num_Sec"]) < self.block_table['Num_Sec']):
                         return;
 
-                #comprobar si esta o no en la tabla los datos recibidos
+                
                 if (int(hddp_header["Num_Sec"]) > self.block_table['Num_Sec']):
-                        #mediamos la distancia al nodo sdn
-                        if (self.distancia_sdn == 0 or self.distancia_sdn < hddp_header["Num_hops"]):
-                                self.distancia_sdn = hddp_header["Num_hops"];
-                        #aumentamos en 1 el estado por guardar el request
+                        
+                        if (self.distance_sdn == 0 or self.distance_sdn < hddp_header["Num_hops"]):
+                                self.distance_sdn = hddp_header["Num_hops"];
+                        
                         self.estado += int(1)
-                        #solo se modifica una vez
-                        hddp_header["last_mac"] = str(self.mac_propia[0]).split(":") #meto mi mac para decir al resto que este bcast viene de mi
+                       
+                        hddp_header["last_mac"] = str(self.mac_myself[0]).split(":") 
                         hddp_header["Num_hops"] = int(hddp_header["Num_hops"]) + 1      
                         for interface in self.inputs:
-                                eth_header["mac_src"] = str(self.mac_interfaz(interface)).split(":"); #str(self.mac_propia[0]).split(":");
+                                eth_header["mac_src"] = str(self.mac_interface(interface)).split(":"); 
                                 hddp_header["mac_sig"] = eth_header["mac_src"];
                                 hddp_packet_request, types, id_devices, inports, outports, bidirectionals = self.create_hddp_packet(pkt, eth_header, 
                                         hddp_header, HDDP_REQ, entry_interface, interface, 1, 0)
@@ -472,14 +467,14 @@ class hddp_sniffer:
                 eth_header["mac_dst"] = mac_src;
                 hddp_header["OpCode"] = HDDP_REP;
                 hddp_header["mac_sig"] = mac_ant;
-                hddp_header["src_mac"] = str(self.mac_interfaz(entry_interface)).split(":")
+                hddp_header["src_mac"] = str(self.mac_interface(entry_interface)).split(":")
                 hddp_header["Num_Ack"] = int(random.getrandbits(64));
 
                 self.save_packet_waiting_ack(pkt, eth_header.copy(), hddp_header.copy(), entry_interface)
 
-                #ahora si cambiamos el numero de saltos a 1
+                
                 hddp_header["Num_hops"] = int(1);
-                #generamos el paquete a enviar
+                
                 link_bidi = 1
                 hddp_packet_reply, types, id_devices, inports, outports, bidirectionals = self.create_hddp_packet(
                         pkt, eth_header, hddp_header, HDDP_NEW, entry_interface, entry_interface, link_bidi, 0)
@@ -493,36 +488,36 @@ class hddp_sniffer:
                 self.num_packet_reply_ucast_exit += int(1)
 
         def process_hddp_request_eth(self, pkt, eth_header, hddp_header, entry_interface):
-                send_reply_por_bloqueo = 0
+                send_reply_block = 0
                 mac_ant = hddp_header["mac_sig"];
                 mac_src = eth_header["mac_src"];
-                #comprobar si esta o no en la tabla los datos recibidos
+                
                 if (int(hddp_header["Num_Sec"]) < self.block_table['Num_Sec']):
                         return;
 
                 if (int(hddp_header["Num_Sec"]) > self.block_table['Num_Sec']):
-                        #indicamos que no se envia reply por bloqueo
-                        send_reply_por_bloqueo = 0
+                        
+                        send_reply_block = 0
                         self.block_table["mac_src"] = hddp_header["src_mac"]
-                        self.block_table["mac_ant"] = hddp_header["last_mac"]; # guardo la mac del salto anterior
+                        self.block_table["mac_ant"] = hddp_header["last_mac"]; 
                         self.block_table["timestamp"] = (time.time() * 1000) + float(hddp_header["Time_Block"])
                         self.block_table["Num_Sec"] = int(hddp_header["Num_Sec"])
-                        self.block_table["interfaz_salida"] = entry_interface #solo debe haber una
+                        self.block_table["interfaz_salida"] = entry_interface 
 
-                        #solo se modifica una vez
-                        hddp_header["last_mac"] = str(self.mac_propia[0]).split(":") #meto mi mac para decir al resto que este bcast viene de mi
+                        
+                        hddp_header["last_mac"] = str(self.mac_myself[0]).split(":") 
                         hddp_header["Num_hops"] = int(hddp_header["Num_hops"]) + 1 
-                        timer = time.time() * 1000 #guardo el timer para despues
+                        timer = time.time() * 1000 
                         if  len(self.inputs) > 1 :
                             for interface in self.inputs:
                                 if (interface != entry_interface):
                                     if (self.name_interfaz(interface).find("wlan") != -1 ):
-                                            eth_header["mac_src"] = str(self.mac_interfaz(interface)).split(":"); 
+                                            eth_header["mac_src"] = str(self.mac_interface(interface)).split(":"); 
                                     hddp_header["mac_sig"] = eth_header["mac_src"];
                                     hddp_packet_request, types, id_devices, inports, outports, bidirectionals = self.create_hddp_packet(pkt, eth_header, 
                                             hddp_header, HDDP_REQ, entry_interface, interface, 1, 0)
 
-                                    self.guardar_request_para_reenvio(timer, hddp_header, interface, hddp_packet_request, "ETH")
+                                    self.save_request_to_resend(timer, hddp_header, interface, hddp_packet_request, "ETH")
 
                                     if not self.message_queues.has_key(interface):
                                             self.message_queues[interface] = []
@@ -533,13 +528,13 @@ class hddp_sniffer:
                                     self.num_packet_request_exit += int(1)
                                     
                 else:
-                        send_reply_por_bloqueo = 1
+                        send_reply_block = 1
 
-                if (send_reply_por_bloqueo == 1 or len(self.inputs) == 1 or self.nodo_mixto == True):                       
+                if (send_reply_block == 1 or len(self.inputs) == 1 or self.nodo_mixto == True):                       
                         eth_header["mac_dst"] = mac_src;
                         hddp_header["OpCode"] = HDDP_REP;
                         hddp_header["mac_sig"] = mac_src;
-                        hddp_header["src_mac"] = str(self.mac_interfaz(entry_interface)).split(":")
+                        hddp_header["src_mac"] = str(self.mac_interface(entry_interface)).split(":")
                         hddp_header["Num_Ack"] = int(random.getrandbits(64));
 
                         hddp_header["Num_hops"] = int(1);
@@ -556,22 +551,22 @@ class hddp_sniffer:
 
 
         def process_hddp_reply(self, pkt, eth_header, hddp_header, entry_interface):
-                self.eliminar_reenvio_request_por_reply(hddp_header)
+                self.remove_resend_request_by_reply(hddp_header)
                 
                 if (self.block_table["Num_Sec"] > hddp_header["Num_Sec"]):
                         return;
 
-                mac_siguiente = [str(hddp_header["mac_sig"][x].split('0x')[1]) for x in range(0, len(hddp_header["mac_sig"]))]
-                if ( self.pkt_for_me(mac_siguiente, hddp_header["Num_Sec"], pkt, len(self.make_header_hppd_fixed(eth_header, hddp_header)), hddp_header["Num_hops"]) < 0 ):
+                next_mac = [str(hddp_header["mac_sig"][x].split('0x')[1]) for x in range(0, len(hddp_header["mac_sig"]))]
+                if ( self.pkt_for_me(next_mac, hddp_header["Num_Sec"], pkt, len(self.make_header_hppd_fixed(eth_header, hddp_header)), hddp_header["Num_hops"]) < 0 ):
                         return
                 else:
-                        if int(hddp_header["Num_hops"]) == int(1) and self.name_interfaz(entry_interface).find("wlan") != -1 : #el reply que nos llega viene de un request
+                        if int(hddp_header["Num_hops"]) == int(1) and self.name_interfaz(entry_interface).find("wlan") != -1 : 
                             hddp_header["OpCode"] = HDDP_ACK;
 
                             hddp_header["mac_sig"] = eth_header["mac_src"];
-                            hddp_header["last_mac"] = str(self.mac_interfaz(entry_interface)).split(":")
+                            hddp_header["last_mac"] = str(self.mac_interface(entry_interface)).split(":")
                             eth_header["mac_dst"] = eth_header["mac_src"];
-                            eth_header["mac_src"] = str(self.mac_interfaz(entry_interface)).split(":");
+                            eth_header["mac_src"] = str(self.mac_interface(entry_interface)).split(":");
                             
                             hddp_packet_ack, types, id_devices, inports, outports, bidirectionals= self.create_hddp_packet(
                                     pkt, eth_header, hddp_header, HDDP_NEW, entry_interface, entry_interface, 1, 0)
@@ -585,11 +580,11 @@ class hddp_sniffer:
 
                         hddp_header["OpCode"] = HDDP_REP;
                         hddp_header["Num_hops"] += int(1);
-                        hddp_header["Num_Ack"] = int(random.getrandbits(64)); #actualizamos el num_ack por otro aleatorio que lo identifique de forma unica
+                        hddp_header["Num_Ack"] = int(random.getrandbits(64));
 
                         if (self.block_table["interfaz_salida"]):
                             eth_header["mac_dst"] = self.block_table["mac_ant"];
-                            hddp_header["mac_sig"] = self.block_table["mac_ant"]; #indicamos
+                            hddp_header["mac_sig"] = self.block_table["mac_ant"]; 
                             link_bidi = 1
                             hddp_packet_reply, types, id_devices, inports, outports, bidirectionals = self.create_hddp_packet(
                                     pkt, eth_header, hddp_header, HDDP_REP, entry_interface, self.block_table["interfaz_salida"], link_bidi)
@@ -609,7 +604,7 @@ class hddp_sniffer:
                                 if not self.message_queues.has_key(interface):
                                     self.message_queues[interface] = []
                                 self.message_queues[interface].append(hddp_packet_reply)
-                                #lo metemos para escribir
+                                
                                 if not interface in self.outputs:
                                     self.outputs.append(interface)
                                 self.num_packet_reply_bcast_exit += int(1)
@@ -620,17 +615,17 @@ class hddp_sniffer:
                 self.process_hddp_ack_rep(pkt, eth_header, hddp_header)
                 if (int(hddp_header["Num_Sec"]) != self.block_table['Num_Sec']):
                     self.block_table["mac_src"] = hddp_header["src_mac"]
-                    self.block_table["mac_ant"] = hddp_header["last_mac"]; # guardo la mac del salto anterior
+                    self.block_table["mac_ant"] = hddp_header["last_mac"];
                     self.block_table["timestamp"] = (time.time() * 1000) + float(hddp_header["Time_Block"])
                     self.block_table["Num_Sec"] = int(hddp_header["Num_Sec"])
-                    self.block_table["interfaz_salida"] = entry_interface #solo debe haber una
+                    self.block_table["interfaz_salida"] = entry_interface 
                     self.process_send_hddp_req(pkt, eth_header, hddp_header);
                         
         def process_send_hddp_req(self, pkt, eth_header, hddp_header):
             if (self.request_waiting_ack.has_key(hddp_header["Num_Sec"])):
                 timer = time.time() * 1000
                 for interfaz_out in self.request_waiting_ack[hddp_header["Num_Sec"]].keys():
-                    self.guardar_request_para_reenvio(timer, hddp_header, interfaz_out, self.request_waiting_ack[hddp_header["Num_Sec"]][interfaz_out].values()[0], "WIFI")
+                    self.save_request_to_resend(timer, hddp_header, interfaz_out, self.request_waiting_ack[hddp_header["Num_Sec"]][interfaz_out].values()[0], "WIFI")
 
                     if not self.message_queues.has_key(interfaz_out):
                             self.message_queues[interfaz_out] = []
@@ -653,7 +648,7 @@ class hddp_sniffer:
                         self.reply_waiting_ack.pop(hddp_header["Num_Ack"], None);
 
         def process_hddp_frame(self,pkt, eth_header, hddp_header_data, entry_interface):
-                hddp_header = {} #creamos la variable local
+                hddp_header = {}
 
                 command = "!1B1B1BQ1B"
                 fields_fixed_hddp = struct.unpack(command, hddp_header_data[0:12])
@@ -675,14 +670,14 @@ class hddp_sniffer:
                         self.last_timer = int(round(time.time() * 1000))
                 
                 if (hddp_header["Num_Sec"] > self.num_sec and self.num_sec != 0):
-                        self.volcar_datos_a_fichero();
+                        self.write_data_file();
                         
                 if (self.num_sec == 0):
                         self.num_sec = hddp_header["Num_Sec"]
 
                 self.num_packet_hddp_ingress += int(1)
 
-                if(hddp_header["OpCode"] == HDDP_REQ): #go to request handler
+                if(hddp_header["OpCode"] == HDDP_REQ):
                         self.num_packet_request_ingress += int(1)
                         if (self.name_interfaz(entry_interface) == -1):
                                 return
@@ -690,7 +685,7 @@ class hddp_sniffer:
                                 self.process_hddp_request_wifi(pkt, eth_header, hddp_header, entry_interface)
                         else:
                                 self.process_hddp_request_eth(pkt, eth_header, hddp_header, entry_interface)
-                elif (hddp_header["OpCode"] == HDDP_REP): #go to reply handler
+                elif (hddp_header["OpCode"] == HDDP_REP): 
                         str_mac = self.struc_to_mac(hddp_header["mac_sig"])
                         if (str_mac == 'ff:ff:ff:ff:ff:ff' or str_mac == "0xff:0xff:0xff:0xff:0xff:0xff"):
                                 self.num_packet_reply_bcast_ingress += int(1)
@@ -703,17 +698,17 @@ class hddp_sniffer:
                 return
 
         def print_datas(self):
-                text = "macs propias validas: "+str(self.mac_propia)+"\n"
-                text +="nombres interfaces: "+str(self.interface_name)+"\n"
-                text +="socket validos:"+str(self.inputs)+"\n"
-                text +="Ids propias validas: "+str(self.ID_Propia)+"\n"
+                text = "MACS Addr: "+str(self.mac_myself)+"\n"
+                text +="Interface names: "+str(self.interface_name)+"\n"
+                text +="Sockets:"+str(self.inputs)+"\n"
+                text +="Ids: "+str(self.ID_Propia)+"\n"
                 text +="Block table: "+ str(self.block_table)+"\n"
-                text +="Id para onos: "+str(self.Id_onos)+"("+self.int_to_mac(self.Id_onos)+")\n"
-                text +="Tipo de dispostivo: "+str(self.type_device)+"\n"
+                text +="ONOS ID: "+str(self.Id_onos)+"("+self.int_to_mac(self.Id_onos)+")\n"
+                text +="Device type: "+str(self.type_device)+"\n"
                 self.log ("INFO", text);
                 return;
         
-        def volcar_datos_a_fichero(self):
+        def write_data_file(self):
                 f = open(str(self.nombre_fichero), "a+")
                 f.write(str(self.num_sec)+"\t"+
                         str(self.num_packet_request_exit)+"\t"+
@@ -727,7 +722,7 @@ class hddp_sniffer:
                         str(self.num_packet_hddp_ingress)+"\t"+
                         str(self.last_timer)+"\t"+
                         str(self.estado)+"\t"+
-                        str(self.distancia_sdn)+"\n")
+                        str(self.distance_sdn)+"\n")
 
                 f.close()
                 self.num_sec = int(0)
@@ -742,7 +737,7 @@ class hddp_sniffer:
                 self.num_packet_hddp_ingress = int(0)
                 self.last_timer = int(0)
                 self.estado = int(0)
-                self.distancia_sdn = int(0)
+                self.distance_sdn = int(0)
 
         def log(self,Type, mensaje):
                 if (self.log_activo):
@@ -781,46 +776,43 @@ class hddp_sniffer:
                             if self.request_resent[num_sequece_resend_request] >= NUM_RESEND:
                                 self.request_waiting_reply.pop(num_sequece_resend_request, None)
                                 self.request_resent.pop(num_sequece_resend_request, None)
-                
-   
-
-                #comprobamos si necesitamos enviar los reply por falta de confirmacion mediante ack
+                  
                 remove_items = []
                 move_time_items = []
                 timers = {}
                 current_time = time.time() * 1000
                 for resend_reply in self.reply_waiting_ack:
                         if int(self.reply_waiting_ack[resend_reply]["time_send"]) + int(self.resend_time) <= current_time:
-                                Modelo_retrans = 0
+                                retrans_model = 0
 
                                 if not self.reply_waiting_ack_counter.has_key(resend_reply):
                                     if NUM_RESEND > 0:
-                                        Modelo_retrans = 0
+                                        retrans_model = 0
                                         self.reply_waiting_ack_counter[resend_reply] = int(1);
                                     else:
                                         if (self.block_table["mac_ant"] != self.reply_waiting_ack[resend_reply]["hddp_header"]["mac_sig"] and 
                                         self.block_table["mac_ant"] != [] and self.block_table["timestamp"] >= current_time):
-                                            Modelo_retrans = 1
+                                            retrans_model = 1
                                         else:
-                                            Modelo_retrans = 2
+                                            retrans_model = 2
                                         self.reply_waiting_ack_counter.pop(resend_reply, None);
                                         remove_items.append(resend_reply)
                                 elif (self.reply_waiting_ack_counter[resend_reply] < NUM_RESEND):
-                                    Modelo_retrans = 0
+                                    retrans_model = 0
                                     self.reply_waiting_ack_counter[resend_reply] += int(1);
                                 else:
                                     if (self.block_table["mac_ant"] != self.reply_waiting_ack[resend_reply]["hddp_header"]["mac_sig"] and 
                                         self.block_table["mac_ant"] != [] and self.block_table["timestamp"] >= current_time):
-                                        Modelo_retrans = 1
+                                        retrans_model = 1
                                     else:
-                                        #enviamos por broadcast
-                                        Modelo_retrans = 2
+                                        
+                                        retrans_model = 2
                                     self.reply_waiting_ack_counter.pop(resend_reply, None);
                                     remove_items.append(resend_reply)
 
 
                                 try:
-		                        if (Modelo_retrans == 0):
+		                        if (retrans_model == 0):
 		                            link_bidi = 1;
 		                            hddp_packet_reply, types, id_devices, inports, outports, bidirectionals = self.create_hddp_packet(
 		                                    "", self.reply_waiting_ack[resend_reply]["eth_header"], self.reply_waiting_ack[resend_reply]["hddp_header"], HDDP_RESEND, 
@@ -828,11 +820,11 @@ class hddp_sniffer:
 		                            self.reply_waiting_ack[resend_reply]["entry_interface"].send(hddp_packet_reply);
 		                            self.num_packet_reply_ucast_exit += int(1)
 		                            
-		                            #actualizamos el timer de envio
+		                            
 		                            self.reply_waiting_ack[resend_reply]["time_send"] += self.resend_time
 		                            
-		                        elif (Modelo_retrans == 1):
-		                            #si no es el mismo lo envio al default
+		                        elif (retrans_model == 1):
+		                            
 		                            self.reply_waiting_ack[resend_reply]["hddp_header"]["Num_hops"] = 2
 		                            self.reply_waiting_ack[resend_reply]["bidirectionals"][0] = int(bin(int(SIZE_TYPE_DEV-1) << 6 | int(SIZE_ID_MAC-1) << 3 | 
 		                                int (SIZE_PORT -1) << 1 | int (0)),2) 
@@ -846,23 +838,23 @@ class hddp_sniffer:
 		                            self.num_packet_reply_ucast_exit += int(1)
 		                            
 		                        else:
-		                            #si es el mismo lo mando en broadcast para que todo el mundo me oiga
+		                            
 		                            self.reply_waiting_ack[resend_reply]["hddp_header"]["mac_sig"] = ['0xff','0xff','0xff','0xff','0xff','0xff']
 		                            self.reply_waiting_ack[resend_reply]["eth_header"]["mac_dst"] = ['0xff','0xff','0xff','0xff','0xff','0xff']
 		                            self.reply_waiting_ack[resend_reply]["hddp_header"]["Num_hops"] = 2
 		                            self.reply_waiting_ack[resend_reply]["bidirectionals"][0] = int(bin(int(SIZE_TYPE_DEV-1) << 6 | int(SIZE_ID_MAC-1) << 3 | 
 		                                int (SIZE_PORT -1) << 1 | int (0)),2)
 		                            link_bidi = 0;
-		                            #en ambos caso el primer salto ya no soy yo, es el anterior a mi
+		                            
 		                            for out_interface in self.inputs:
-		                                    self.reply_waiting_ack[resend_reply]["eth_header"]["mac_src"] = str(self.mac_interfaz(out_interface)).split(":")
-		                                    self.reply_waiting_ack[resend_reply]["hddp_header"]["last_mac"] = str(self.mac_interfaz(out_interface)).split(":")
+		                                    self.reply_waiting_ack[resend_reply]["eth_header"]["mac_src"] = str(self.mac_interface(out_interface)).split(":")
+		                                    self.reply_waiting_ack[resend_reply]["hddp_header"]["last_mac"] = str(self.mac_interface(out_interface)).split(":")
 		                                    hddp_packet_reply, types, id_devices, inports, outports, bidirectionals = self.create_hddp_packet(
 		                                            "", self.reply_waiting_ack[resend_reply]["eth_header"], self.reply_waiting_ack[resend_reply]["hddp_header"], HDDP_RESEND, 
 		                                            self.reply_waiting_ack[resend_reply]["entry_interface"], out_interface, link_bidi, resend_reply)                                                      
 		                                    out_interface.send(hddp_packet_reply)
 		                                    self.num_packet_reply_bcast_exit += int(1)
-		                                    #time.sleep(0.01)                                              
+		                                                                                  
 
 
                                 except Exception as exception:
@@ -876,10 +868,10 @@ class hddp_sniffer:
         def recv(self):
                 while True:
                         readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs, self.timeout/1000)
-                        #empezamos por los elementos que leibles
+                        
                         for interface_readable in readable:
                                 try:
-                                        eth_header = {}; #creamos la varible local
+                                        eth_header = {}; 
                                         pkt, sa_ll = interface_readable.recvfrom(MTU)
                                 
                                         if len(pkt) <= 0:
@@ -890,15 +882,15 @@ class hddp_sniffer:
                                         eth_header["mac_src"] = [hex(int(eth_header_data[x])) for x in range(6,12)]
                                         eth_header["eth_type"] = (int(eth_header_data[12]))
 
-                                        if sa_ll[2] == socket.PACKET_OUTGOING: #los paquetes de salida me dan igual
+                                        if sa_ll[2] == socket.PACKET_OUTGOING: 
                                                 continue
-                                        if (eth_header["eth_type"] != ETH_HDDP): #si no es un hddp pasando
+                                        if (eth_header["eth_type"] != ETH_HDDP): 
                                                 continue
 
-                                        hddp_header = pkt[14:len(pkt)] #todo lo que quede es hddp
+                                        hddp_header = pkt[14:len(pkt)] 
                                         
                                         self.process_hddp_frame(pkt, eth_header, hddp_header, interface_readable)
-                                        #comprobamos si existe algo por mandar
+                                        
                                 except Exception as exception:
                                         continue                       
                         
@@ -913,7 +905,7 @@ class hddp_sniffer:
                                 try: 
                                     if self.message_queues.has_key(interface_writable):
                                         self.message_queues.pop(interface_writable,None)
-                                    #lo metemos para escribir
+                                    
                                     if interface_writable in self.outputs:
                                         self.outputs.remove(interface_writable)
                                 except Exception as exception:
@@ -925,13 +917,10 @@ hddp_sniff = hddp_sniffer()
 num_wlan = int(0)
 num_eth = int(0)
 
-#pasar el parametro por linea de comando
-#optenemos el nombre de nuestra interfaz)
 lista_intf = os.listdir('/sys/class/net/')
-#sacamos nombre interfaz valido
 for interface in lista_intf:
         if interface.find("lo") != -1:
-                continue; #la de loopback no la abrimos
+                continue; 
         elif interface.find("wlan") != -1:
                 num_wlan += int(1)
         else:
