@@ -923,7 +923,7 @@ for interface in lista_intf:
                 continue; 
         elif interface.find("wlan") != -1:
                 num_wlan += int(1)
-        else:
+        else: 
                 num_eth += int(1)
         fd = open('/sys/class/net/'+str(interface)+"/address","r")
         mac_interface = str(fd.read().split("\n")[0])
