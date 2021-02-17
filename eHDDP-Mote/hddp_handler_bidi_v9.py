@@ -914,7 +914,7 @@ class hddp_sniffer:
 
 hddp_sniff = hddp_sniffer()
 
-num_wlan = int(0)
+num_wlan = int(0) 
 num_eth = int(0)
 
 lista_intf = os.listdir('/sys/class/net/')
