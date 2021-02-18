@@ -204,35 +204,21 @@ class Mobility(object):
                     deny = ' -R '
                     num_accept = 0;
                     num_deny = 0;
-                    #debug uah para topos
-                    topo_file = open ("/home/arppath/data-onos-hddp/topology.txt", "a")
-                    topo_file.write(str(node)+"\t");
+
                     for node_dst in intf.link.nodes:
                         dist_me_to_dst = node.get_distance_to(node_dst)
                         dist_src_to_me = node_dst.get_distance_to(node)
                         wlan = node_dst.params['wlan'].index(intf.link.intfs[intf.link.nodes.index(node_dst)])
                         intf_dst = node_dst.wintfs[wlan]
-                        debug ("\nComprobacion de conexion entre ", node.name," y ",node_dst.name,"\n")
-                        debug ("UAH---------->intf.link tipo", type(intf.link),"\n")
-                        debug ("UAH---------->intf_dst.link:", intf_dst.link, "| tipo", type(intf_dst.link),"\n")
                         if dist_src_to_me<= intf_dst.link.range:
-                            if (node != node_dst):
-                                topo_file.write(str(node_dst)+"\t");
                             num_accept +=int(1);
                             allow += intf_dst.mac + ","
                             debug ("nodes", nodes, "|| node:", node, "|| node_dst:", node_dst, "\n")
                             if dist_me_to_dst <= intf.link.range and node_dst not in nodes:
-                                node_dst.cmd("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./prog_user --dev ",intf_dst.name," -L ",intf.mac,"&& cd")
-                                info("\nInstalamos regla en",node_dst, "ya que no esta en la lista de elementos moviendose\n")
-                            debug ("\nConexion establecida entre ", node.name," y ",node_dst.name,"\n")
+                                node_dst.cmd("cd ~/eHDDP/filter_packet_xdp && ./prog_user --dev ",intf_dst.name," -L ",intf.mac,"&& cd")
                         else:
                             num_deny +=int(1);
                             deny += intf_dst.mac + ","
-                            debug ("\nConexion eliminada entre ", node.name," y ",node_dst.name,"\n")
-                    #find de la escritura
-                    topo_file.write("\n");
-                    topo_file.close()
-
                     if (num_accept > 0):
                         cmd += " "+allow +" "
                     if (num_deny > 0):
