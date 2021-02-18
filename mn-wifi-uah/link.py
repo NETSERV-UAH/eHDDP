@@ -1852,9 +1852,6 @@ class adhocmultinodes(LinkAttrs):
         self.node = node
         self.nodes = nodes
 
-        debug ("UAH->>> nodo al que voy a configurar:",self.node,"\n")
-
-        #introducimos los datos el nodo principal
         if (node_src):
             intfs.append(intf)
             nodes.append(node)
@@ -1868,9 +1865,6 @@ class adhocmultinodes(LinkAttrs):
         intf.link = self
         LinkAttrs.__init__(self, node, intf, wlan)
 
-        #self.range = node.wintfs[0].range
-        #self.range = intf.range
-        #self.static_range = True #digo es que es manual para poder controlarlo
         self.intf = intf
         self.intfs = intfs
         self.ssid = ssid
@@ -1885,7 +1879,6 @@ class adhocmultinodes(LinkAttrs):
         if (float(loss) > float(0)):
             self.loss = loss
 
-        # It takes default values if keys are not set
         kwargs = {'txpower': 15, 'ap_scan': 2, 'bitrates': ''}
 
         for k, v in kwargs.items():
@@ -1903,11 +1896,9 @@ class adhocmultinodes(LinkAttrs):
         self.name = intf.name
 
         if (float(loss) > float(0)):
-            #debug("SI existen perdidas en el enlace: "+str(loss)+"\n")
             intf1 = WirelessLink(name=node.params['wlan'][wlan], node=node, link=self, 
                 port=wlan, loss=self.loss)
         else:
-            #debug("NO existe perdidas en el enlace\n")
             intf1 = WirelessLink(name=node.params['wlan'][wlan], node=node, link=self, 
                 port=wlan)
         intf2 = 'wifiAdhocmultinodes'
@@ -1924,10 +1915,8 @@ class adhocmultinodes(LinkAttrs):
         # All we are is dust in the wind, and our two interfaces
         self.intf1, self.intf2 = intf1, intf2
 
-        #debug("UAH ------------> multinodes -> Asignamos el programa xdp a la interfaz del equipo: ", self.node.name, "\n")
         self.node.mount_bfs()
-        #debug("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./xdp_loader -d", intf.name," -F --progsec xdp_filter_packet --auto-mode\n")
-        self.node.cmd("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./xdp_loader -d", intf.name," -F --progsec xdp_filter_packet --auto-mode && cd")      
+        self.node.cmd("cd ~/eHDDP/filter_packet_xdp && ./xdp_loader -d", intf.name," -F --progsec xdp_filter_packet --auto-mode && cd")      
 
         if (node_src):
             position = 0    
@@ -1943,10 +1932,7 @@ class adhocmultinodes(LinkAttrs):
                         proto=proto, ibss=ibss, node_src = False, loss = loss, 
                         **params)
                 position = int(position) + 1
-        #Allowing the communication if both nodes are in range
         self.configurecommunication()
-
-        #Ahora configuramos los enlaces      
         self.setTxPower_intermidiate(self.txpower)
 
 
@@ -1958,20 +1944,9 @@ class adhocmultinodes(LinkAttrs):
                 if hasattr(self.node, 'position') and hasattr(node_dst, 'position'):          
                     dist = self.node.get_distance_to(node_dst)
                     if dist > self.range:
-                        #debug(self.node.name, " y ", node_dst.name, " NO estan a rango","\n")
-                        #debug("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./prog_user --dev ",self.intf.name," -R ",intf.mac,"&& cd \n")
-                        self.node.cmd("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./prog_user --dev ",self.intf.name," -R ",intf.mac,"&& cd")
+                        self.node.cmd("cd ~/eHDDP/filter_packet_xdp && ./prog_user --dev ",self.intf.name," -R ",intf.mac,"&& cd")
                     else:
-                        #debug(self.node.name, " y ", node_dst.name, " estan a rango","\n")
-                        #debug("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./prog_user --dev ",self.intf.name," -L ",intf.mac,"&& cd\n")
-                        self.node.cmd("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./prog_user --dev ",self.intf.name," -L ",intf.mac,"&& cd")
-                        
-                '''else:
-                    debug("como no conocemos la posicion los suponemos juntos","\n")
-                    debug("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./prog_user --dev ",self.intf.name," -L ",intf.mac,"\n")
-                    self.node.cmd("cd /home/arppath/custom/Pruebas-HDDP/filter_packet_xdp && ./prog_user --dev ",self.intf.name," -L ",intf.mac,"&& cd")
-                    sleep(0.5)'''
-
+                        self.node.cmd("cd ~/eHDDP/filter_packet_xdp && ./prog_user --dev ",self.intf.name," -L ",intf.mac,"&& cd")
 
     def configureAdhoc(self):
         "Configure Wireless Ad Hoc"
