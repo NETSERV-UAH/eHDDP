@@ -19,7 +19,7 @@ step 1: $ sudo apt-get install git
 step 2: $ git clone https://github.com/intrig-unicamp/mininet-wifi  
 step 3: $ cd mininet-wifi  
 step 4: $ sudo util/install.sh -Wlnfv  
-**Steps to install of modification eHDDP for mininet-wifi**  
+**Steps to install of eHDDP modification for mininet-wifi**  
 step 5: Copy the content in mn-wifi-uah folder into mininet-wifi/mn-wifi/.  
 step 6: Reinstall mininet-wifi using $ sudo python setup install  
 
