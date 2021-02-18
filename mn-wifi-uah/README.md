@@ -1,3 +1,14 @@
+# eHDDP: enhanced Hybrid Domain Discovery Protocol 
+
+Copyright (C) 2020 Isaias Martinez-Yelmo(1), Joaquín Álvarez-Horcajo(1), Juan Antonio-Carral (1) and Diego Lopez-Pajares (2);
+
+
+                     (1) GIST, University of Alcala, Spain.
+                     
+                     (2) Polytechnic University of Madrid, Spain.
+
+
+
 ### About Mininet-WiFi
 Mininet-WiFi is a fork of Mininet (http://mininet.org/) which allows the using of both WiFi Stations and Access Points. 
 Mininet-WiFi only add wifi features and you can work with it like you were working with Mininet.   
