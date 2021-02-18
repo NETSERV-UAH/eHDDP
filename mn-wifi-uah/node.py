@@ -1,23 +1,19 @@
-"""
-Node objects for Mininet-WiFi.
-Nodes provide a simple abstraction for interacting with stations, aps
-and controllers. Local nodes are simply one or more processes on the local
-machine.
-Node: superclass for all (primarily local) network nodes.
-Station: a virtual station. By default, a station is simply a shell; commands
-    may be sent using Cmd (which waits for output), or using sendCmd(),
-    which returns immediately, allowing subsequent monitoring using
-    monitor(). Examples of how to run experiments using this
-    functionality are provided in the examples/ directory. By default,
-    stations share the root file system, but they may also specify private
-    directories.
-CPULimitedStation: a virtual station whose CPU bandwidth is limited by
-    RT or CFS bandwidth limiting.
-UserAP: a AP using the user-space switch from the OpenFlow
-    reference implementation.
-OVSAP: a AP using the Open vSwitch OpenFlow-compatible switch
-    implementation (openvswitch.org).
-"""
+'''
+ * This file is part of the HDDP Switch distribution (https://github.com/gistnetserv-uah/eHDDP).
+ * Copyright (c) 2020.
+ * 
+ * This program is free software: you can redistribute it and/or modify  
+ * it under the terms of the GNU General Public License as published by  
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful, but 
+ * WITHOUT ANY WARRANTY; without even the implied warranty of 
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License 
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ '''
 
 import os
 import re
