@@ -422,7 +422,6 @@ class Node_wifi(Node):
             self.cmd('ip link set %s up' % intf.name)
         self.showNode()
 
-    #UAH modification    
     def mount_bfs(self):
         self.cmd('sudo mount -t bpf /sys/fs/bpf/ /sys/fs/bpf/')
 
