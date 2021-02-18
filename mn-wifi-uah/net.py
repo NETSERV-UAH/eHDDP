@@ -608,7 +608,7 @@ class Mininet_wifi(Mininet, Mininet_IoT):
             link = cls(node=node1, **params)
             self.links.append(link)
             return link
-        elif cls == adhocmultinodes: #Modificacion UAH
+        elif cls == adhocmultinodes:
             cls(node = node1, **params)
         elif cls == physicalMesh:
             cls(node=node1, **params)
@@ -1389,7 +1389,7 @@ class Mininet_wifi(Mininet, Mininet_IoT):
                     pass
                 else:
                     for intf in node.wintfs.values():
-                        if isinstance(intf, adhoc) or isinstance(intf, adhocmultinodes): #uah:
+                        if isinstance(intf, adhoc) or isinstance(intf, adhocmultinodes):
                             info('%s ' % node)
                             sleep(1)
                     node.pos = (0, 0, 0)
