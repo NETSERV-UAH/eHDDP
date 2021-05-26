@@ -6,6 +6,8 @@ import org.onosproject.net.link.*;
 
 import java.time.Duration;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.BitSet;
 
 import org.onosproject.net.provider.ProviderId;
 import org.slf4j.Logger;
@@ -133,7 +135,7 @@ public class DHTproviderlink implements LinkProvider{
      */
     public boolean linkbewteendevices(DeviceService deviceService, LinkProviderService linkProviderService,
                                       Set<LinkKey> configuredLinks, String srcDpId , int srcport, String dstDpId,
-                                      int dstport, byte bidirectional, Set<LinkDescription> ConfigLinksDesciption) {
+                                      int dstport, boolean bidirectional, Set<LinkDescription> ConfigLinksDesciption) {
 
         BasicLinkConfig link_config_scr_to_dst= null, link_config_dst_to_scr = null;
 
@@ -155,21 +157,30 @@ public class DHTproviderlink implements LinkProvider{
         LinkKey linkKey1 = LinkKey.linkKey(src, dst);
         LinkKey linkKey2 = LinkKey.linkKey(dst, src);
 
-        if (configuredLinks.contains(linkKey1) && configuredLinks.contains(linkKey2)) {
+        /*if (configuredLinks.contains(linkKey1) && configuredLinks.contains(linkKey2)) {
             log.debug("----- UAH -> Detectado ya creado ");
             return true;
-        }
+        }*/
 
         /**Si uno de los dos enlaces es un sensor, entonces el enlace no es durable */
         if ( !(srcDpId.contains("sw") || srcDpId.contains("of")) || !(dstDpId.contains("sw") || dstDpId.contains("of"))){
             /** Le comunicaciones que es bidireccional y no es durable */
-            if (!configuredLinks.contains(linkKey1) || bidirectional == 1)
-                link_config_scr_to_dst = new BasicLinkConfig(linkKey1).isBidirectional(false).isDurable(false);
-            if (!configuredLinks.contains(linkKey2) || bidirectional == 1)
-                link_config_dst_to_scr = new BasicLinkConfig(linkKey2).isBidirectional(false).isDurable(false);
-            if (bidirectional == 1) {
+            if (configuredLinks.contains(linkKey1))
+                configuredLinks.remove(linkKey1);
+            if (configuredLinks.contains(linkKey2))
+                configuredLinks.remove(linkKey2);
+
+            link_config_scr_to_dst = new BasicLinkConfig(linkKey1).isDurable(false);
+            link_config_dst_to_scr = new BasicLinkConfig(linkKey2).isDurable(false);
+
+            if (bidirectional == true) {
                 link_config_scr_to_dst.isBidirectional(true);
                 link_config_dst_to_scr.isBidirectional(true);
+            }
+            else
+            {
+                link_config_scr_to_dst.isBidirectional(false);
+                link_config_dst_to_scr.isBidirectional(false);
             }
         }
         else{
@@ -182,10 +193,12 @@ public class DHTproviderlink implements LinkProvider{
         try{
             if (!configuredLinks.contains(linkKey1)) {
                 insert_linkkey(linkProviderService, ConfigLinksDesciption, configuredLinks, link_config_scr_to_dst, linkKey1);
-                if (bidirectional == 1)
+                if (bidirectional == true || (srcDpId.contains("of") && dstDpId.contains("of"))){
                     insert_linkkey(linkProviderService, ConfigLinksDesciption, configuredLinks, link_config_dst_to_scr, linkKey2);
+                    log.info("UAH->linktopology->Enlace creado entre: {} y {}", linkKey1, linkKey2);
+                }
                 else
-                    log.debug("UAH->linktopology->Enlace creado entre: {}", linkKey1);
+                    log.info("UAH->linktopology->Enlace creado entre: {}", linkKey1);
             }
             else
                 log.debug("UAH->linktopology->Enlace NO creado entre: {} debido a que ya existe", linkKey1);
@@ -227,16 +240,21 @@ public class DHTproviderlink implements LinkProvider{
         int in_ports[]= Packet_in_dht.getinports();
         int out_ports[]= Packet_in_dht.getoutports();
         long Id_Devices[]= Packet_in_dht.getidmacdevices();
-        byte bidirectional[] = Packet_in_dht.getbidirectional();
+        boolean bidirectional = false;
+        /* ampliamos el espacio en uno para los puertos */
+        in_ports = Arrays.copyOf(in_ports, in_ports.length + 1);
+        out_ports = Arrays.copyOf(out_ports, out_ports.length + 1);
 
         /** El primer elemento es especial ya que se conecta con el SDN */
         for (int num = 0; num < Packet_in_dht.getNumHops(); num ++){
+            /* Obtenemos el valor bidireccional del enlace */
+            bidirectional = Packet_in_dht.getbidirectional(num);
             /** Estamos en el caso de conexión con el Switch SDN */
             switch(types_divices[num])
             {
                 case 1: /* SDN case */
                     dstDpid[0] = "of:"+parser_idpacket_to_iddevice(Id_Devices[num]);
-                    bidirectional[num] = (byte)1;
+                    bidirectional = false;
                     break;
                 case 2: /* NO SDN Case */
                     dstDpid[0] = "sw:"+Long.toHexString(Id_Devices[num]);
@@ -269,7 +287,7 @@ public class DHTproviderlink implements LinkProvider{
                 if (out_ports[num] != 0 && out_ports[num] != 255  && in_ports[num + 1] != 0 && in_ports[num + 1] != 255
                         && dstDpid[0] != dstDpid[1]) {
                     linkbewteendevices(deviceService, linkProviderService, configuredLinks, dstDpid[0],
-                            out_ports[num], dstDpid[1], in_ports[num + 1], bidirectional[num],
+                            out_ports[num], dstDpid[1], in_ports[num + 1], bidirectional,
                             ConfigLinksDesciption);
                 }
             } catch (Exception e) {

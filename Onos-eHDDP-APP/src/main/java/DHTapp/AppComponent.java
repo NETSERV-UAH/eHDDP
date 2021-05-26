@@ -44,6 +44,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import com.google.common.primitives.UnsignedBytes;
 
 /** Modificar la topologia en ONOS */
 import org.onosproject.net.PortNumber;
@@ -77,7 +79,7 @@ public class AppComponent{
     /** MAC Propia del protocolo */
     private final String MAC_GENERIC = "AA:BB:CC:DD:EE:FF";
     /** Opction code del protocolo */
-    private final short OPCODE_DHT_REQUEST = 1, OPCODE_DHT_REPLY = 2, OPCODE_DHT_ACK_REQUEST = 3, OPCODE_DHT_RESENT = 4;
+    private final byte OPCODE_DHT_REQUEST = 1, OPCODE_DHT_REPLY = 2, OPCODE_DHT_ACK_REQUEST = 3, OPCODE_DHT_RESENT = 4;
 
     /** @brieg Servicio de Log*/
     private final DHTRecopilationdata datalog = new DHTRecopilationdata();
@@ -178,9 +180,9 @@ public class AppComponent{
     @Activate
     protected void activate() {
         try{
-            appId = coreService.registerApplication("HDPP_Bidi.NetServ.UAH");
+            appId = coreService.registerApplication("eHDDP_inband.NetServ.UAH");
 
-            PID = new ProviderId("cfg", "HDPP_Bidi.NetServ.UAH", true);
+            PID = new ProviderId("cfg", "eHDDP_inband.NetServ.UAH", true);
 
             packetService.addProcessor(processor, PacketProcessor.advisor(2)); //.director(2));
 
@@ -198,9 +200,6 @@ public class AppComponent{
                     scheduledExecutorService.schedule(() -> {
                         /** Cargamos la lista de enlaces*/
                         DHTlink.createLinks(netCfgService,configuredLinks);
-
-                        /** Activo la selección de paquetes para mi protocolo **/
-                        requestIntercepts();
 
                         /** Comenzamos el proceso de exploración*/
                         startDHTProcess();
@@ -247,16 +246,20 @@ public class AppComponent{
                 /**Aumentamos el estadistico*/
                 Num_packet_out++;
                 /** Solo se los mandamos a los OF*/
-                if (device.id().toString().contains("of:")){
+                if (device.id().toString().contains("of:") ){
+                    /** Activo la selección de paquetes para mi protocolo **/
+                    requestIntercepts();
+
                     //log.debug("Device select: "+  device.id());
                     /** redescubrimos los enlaces */
                     /** Creamos el paquete inicial para enviar al device seleccionado*/
                     //log.debug("Creamos paquete DHT Request");
-                    Ethernet packet =  CreatePacketDHT(device.id(), OPCODE_DHT_REQUEST, 255, null,
-                            randomno.nextLong(), ETHERNET_BROADCAST_ADDRESS, MacAddress.valueOf(MAC_GENERIC));
+                    Ethernet packet = CreatePacketDHT(device.id(), OPCODE_DHT_REQUEST, 255, null,
+                            randomno.nextLong(), ETHERNET_BROADCAST_ADDRESS, MAC_GENERIC);
                     //log.debug("Paquete creado correctamente");
                     /** Enviamos el paquete creado */
-                    sendpacketwithDevice(device,packet);
+                    sendpacketwithDevice(device, packet);
+
                     //log.debug("OK->Paquete enviado correctamente!!!");
                     /** Para depurar esperamos un poco entre lanzamientos */
                     //log.debug("Discovery with device id " + device.id() + " DONE");
@@ -322,7 +325,6 @@ public class AppComponent{
             DHTpacket Packet_in_dht;
             short opcode=0 , num_hops=0, type_devices[];
             long id_devices[];
-            byte bidirectional[];
 
             /** Comprobamos si es de nuestro protocolo */
             if (ethPkt == null) {
@@ -354,7 +356,6 @@ public class AppComponent{
                 num_hops = Packet_in_dht.getNumHops();
                 type_devices = Packet_in_dht.getTypedevices();
                 id_devices = Packet_in_dht.getidmacdevices();
-                bidirectional = Packet_in_dht.getbidirectional();
 
                 /** Aumentamos el Estadistico */
                 Num_packet_in++;
@@ -386,7 +387,7 @@ public class AppComponent{
                                     context.inPacket().receivedFrom().deviceId().toString(),
                                     (int) context.inPacket().receivedFrom().port().toLong(),
                                     "of:" + DHTlink.parser_idpacket_to_iddevice(id_devices[0]),
-                                    port_link, (byte) 1, ConfigLinksDesciption);
+                                    port_link, true, ConfigLinksDesciption);
                         }
                     }
                     /** Si llega un request y NO es un enlace directo entre dos SDN*/
@@ -402,7 +403,7 @@ public class AppComponent{
                                 deviceService.getPort(context.inPacket().receivedFrom().deviceId(), PortNumber.portNumber(1)),
                                 randomno.nextLong(),
                                 ETHERNET_BROADCAST_ADDRESS,
-                                MacAddress.valueOf(MAC_GENERIC)
+                                MAC_GENERIC
                         );
                         //log.debug("Enviamos paquete reply");
                         /** Enviamos el paquete creado utilizando la id del switch */
@@ -435,7 +436,7 @@ public class AppComponent{
                             context.inPacket().receivedFrom().deviceId().toString(),
                             (int)context.inPacket().receivedFrom().port().toLong(),
                             "of:"+ DHTlink.parser_idpacket_to_iddevice(id_devices[0]),
-                            Packet_in_dht.getoutports()[0], bidirectional[0], ConfigLinksDesciption);
+                            Packet_in_dht.getoutports()[0], Packet_in_dht.getbidirectional(0), ConfigLinksDesciption);
                     }else{
                         /** Existen nodos entre ellos */
                         /** Comprobamos que todos los dispositivos y sus puertos esten en la topologia
@@ -466,13 +467,15 @@ public class AppComponent{
      * @param port puerto (representa el puerto de salida)
      * @param mac_port class port para obtener la mac del puerto de salida
      */
-    private Ethernet CreatePacketDHT(DeviceId deviceId, short Opcode, int port, Port mac_port, long num_ack,
-                                     String mac_dst, MacAddress next_hop) {
+    private Ethernet CreatePacketDHT(DeviceId deviceId, byte Opcode, int port, Port mac_port, long num_ack,
+                                     String mac_dst, String next_hop) {
         Ethernet packet = new Ethernet();
-        short Num_devices = 1, Type_devices[] = new short[DHTpacket.DHT_MAX_ELEMENT];
+        short Type_devices[] = new short[DHTpacket.DHT_MAX_ELEMENT];
         int  outports[] = new int[DHTpacket.DHT_MAX_ELEMENT], inports[] = new int[DHTpacket.DHT_MAX_ELEMENT];
-        byte bidirectional[]=new byte[DHTpacket.DHT_MAX_ELEMENT];
         long id_mac_devices[] = new long[DHTpacket.DHT_MAX_ELEMENT];
+        byte Previous_MAC_Length = 6, Num_devices = 1;
+        BitSet Version = BitSet.valueOf(new long[] {0b0000001}), Flags = BitSet.valueOf(new long[] {0b0000000});
+        byte configuration [] = new byte [DHTpacket.DHT_MAX_ELEMENT];
 
         /**Completamos los arrays con los datos del switch elegido */
         /*Nodo SDN*/
@@ -482,9 +485,15 @@ public class AppComponent{
         outports[0] = port;
         inports[0] = port;
 
-        DHTpacket RequestPacket = new DHTpacket(next_hop, MacAddress.valueOf(MAC_GENERIC),
-                MacAddress.valueOf(MAC_GENERIC), Opcode, Num_devices, TIME_BLOCK_IN_DEVICE, timestamp_hddp, num_ack,
-                Type_devices, outports, inports, id_mac_devices, bidirectional);
+        /** Inicializamos los valores */
+        configuration[0] = (byte) 0b01111111; /*iniciamos con un valor por defecto*/
+        for (int pos = 1; pos < DHTpacket.DHT_MAX_ELEMENT; pos++){
+            configuration[pos] = (byte)0b00000000;;
+        }
+
+        DHTpacket RequestPacket = new DHTpacket(MacAddress.valueOf(next_hop).toBytes(), MacAddress.valueOf(MAC_GENERIC).toBytes(),
+                MacAddress.valueOf(MAC_GENERIC).toBytes(), Opcode, Num_devices, TIME_BLOCK_IN_DEVICE, timestamp_hddp, num_ack,
+                Type_devices, outports, inports, id_mac_devices, Version, Flags, Previous_MAC_Length, configuration);
 
         /** Creamos paquete y completamos los datos como pay load*/
         RequestPacket.setParent(packet);
@@ -499,14 +508,14 @@ public class AppComponent{
     }
 
     private void send_ack_HDDP_packet(DHTpacket Packet_in_dht, DeviceId deviceId, int port, PortNumber port_number) {
-        short op_code;
+        byte op_code;
         /**Antes de seguir enviamos un ack para qeu el proceso de descubrimiento continue*/
         op_code = OPCODE_DHT_ACK_REQUEST;
 
         Ethernet ACK_packet = CreatePacketDHT(deviceId, op_code, port,
                 deviceService.getPort(deviceId, port_number), Packet_in_dht.getNum_ack(),
                 Packet_in_dht.getLastMac().toString(),
-                Packet_in_dht.getLastMac()
+                Packet_in_dht.getLastMac().toString()
         );
         log.debug("Enviamos paquete ACK");
         /**Aumentamos el estadistico de packet out */

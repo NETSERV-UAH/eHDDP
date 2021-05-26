@@ -28,7 +28,7 @@ public class DHTproviderdevices implements DeviceProvider {
     /** @brieg Servicio de Log*/
     private final Logger log = LoggerFactory.getLogger(getClass());
     /** Valores typo de dispostivos validos */
-    public short TYPE_NO_SDN = 2, TYPE_SDN = 1;
+    final public short TYPE_SDN = 1, TYPE_NO_SDN = 2, TYPE_SDN_NO_CONFIG = 3;
     private enum TYPE_SENSORS {
         TEMPERATURE, WIND, PRESSURE, LIGHT, ACCELEROMETER,
                 VIBRATION, GIROSCOPE, PROXIMITY, DISTANCE, MOVEMENT, SMOKE,
@@ -58,23 +58,34 @@ public class DHTproviderdevices implements DeviceProvider {
         DeviceDescription desc;
         ChassisId cid = new ChassisId(mac);
 
-        if (hw.contains(" Sensor")){
-            uri = URI.create(id);
+        if(hw.contains("sw")){
+            uri = URI.create("sw:"+str_to_id(id));
             /** Creamos el dispositivo */
             desc = new DefaultDeviceDescription(uri, type, manufacturer, hw, sw, serial, cid,
-                            true, DefaultAnnotations.builder().set(AnnotationKeys.PROTOCOL, "No Have")
-                            .set(AnnotationKeys.USERNAME, hw).set(AnnotationKeys.MANAGEMENT_ADDRESS, "1.0.0.1")
-                            .set(AnnotationKeys.NAME, hw)
-                            .build());
+                    true, DefaultAnnotations.builder().set("Switch", "Legacy Switch")
+                    .set(AnnotationKeys.PROTOCOL, "No Have").set(AnnotationKeys.USERNAME, "GateWay")
+                    .set(AnnotationKeys.MANAGEMENT_ADDRESS, "1.0.0.1").set(AnnotationKeys.NAME, "GateWay")
+                    .build());
         }
+        else if(hw.contains("sdn")){
+            uri = URI.create("of:"+str_to_id(id));
+            // Creamos el dispositivo
+            desc = new DefaultDeviceDescription(uri, type, "Stanford University, Ericsson Research and CPqD Research",
+                    "OpenFlow 1.3 Reference Userspace Switch","eHDDP", serial, cid,
+                    true, DefaultAnnotations.builder().set("Switch", "SDN/ehddp Switch")
+                    .set(AnnotationKeys.PROTOCOL, "OF_13").set(AnnotationKeys.USERNAME, uri.toString())
+                    .set(AnnotationKeys.MANAGEMENT_ADDRESS, "127.0.0.1").set(AnnotationKeys.NAME, uri.toString())
+                    .build());
+        }
+        //if (hw.contains("Sensor")){
         else{
-            uri = URI.create("sw:"+id);
+            uri = URI.create("Sensor:"+str_to_id(id));
             /** Creamos el dispositivo */
             desc = new DefaultDeviceDescription(uri, type, manufacturer, hw, sw, serial, cid,
-                            true, DefaultAnnotations.builder().set("Switch", "Legacy Switch")
-                            .set(AnnotationKeys.PROTOCOL, "No Have").set(AnnotationKeys.USERNAME, "GateWay")
-                            .set(AnnotationKeys.MANAGEMENT_ADDRESS, "1.0.0.1").set(AnnotationKeys.NAME, "GateWay")
-                            .build());
+                    true, DefaultAnnotations.builder().set(AnnotationKeys.PROTOCOL, "No Have")
+                    .set(AnnotationKeys.USERNAME, hw).set(AnnotationKeys.MANAGEMENT_ADDRESS, "1.0.0.1")
+                    .set(AnnotationKeys.NAME, hw)
+                    .build());
         }
         configureNodes.add(desc.deviceUri().toString());
 
@@ -117,33 +128,60 @@ public class DHTproviderdevices implements DeviceProvider {
 
         for (int pos = 0; pos < Packet_dht.getNumHops(); pos++){
             Mac = Long.toHexString(Packet_dht.getidmacdevices()[pos]);
-            if (type_device[pos] == TYPE_NO_SDN ){
-                /** Debemos actualizar los dispositivos siempre */
-                try{
-                    uri = CreateorUpdateDevice(dpsv, dpr,"NO SDN DEVICE", "1.0.0",
-                            Mac, "Switch Legacy", Device.Type.SWITCH, Mac, Mac, configureNodes);
-                    /*para ahorrar tiempo ahora comprobamos sus puertos*/
-                    checkportofdevice(dpsv, dsv, Packet_dht, uri, pos);
-                }catch (Exception e){
-                    log.error("UAH->HDDP->ERROR al crear nuevos dispositivos : "+ e.getMessage());
-                    return false;
-                }
-            }
-            /** Si tenemos un sensor y permitimos la conexiones entre sensores */
-            else if(type_device[pos] > TYPE_NO_SDN){
-                /** Debemos actualizar los dispositivos siempre */
-                try{
-                    uri = CreateorUpdateDevice(dpsv, dpr,TYPE_SENSORS[type_device[pos]-3]+" Sensor", "1.0.1",
-                            Mac,"Sensor", Device.Type.OTHER, Mac, Mac, configureNodes);
-                    checkportofdevice(dpsv, dsv, Packet_dht, uri, pos);
-                }catch (Exception e){
-                    log.error("UAH->HDDP-> ERROR al crear nuevos sensores : "+ e.getMessage());
-                    return false;
-                }
+            //log.info("Tipo de device leido: "+type_device[pos]);
+            //log.info("Tipo de device leido: "+type_device[pos]);
+            switch (type_device[pos]) {
+                case TYPE_SDN:
+                    //log.info("Nodos SDN detectado, no se trata ya que lo hace openflow");
+                    break;
+                case TYPE_NO_SDN:
+                    /** Debemos actualizar los dispositivos siempre */
+                    try {
+                        uri = CreateorUpdateDevice(dpsv, dpr, "sw", "1.0.0",
+                                Mac, "Switch Legacy", Device.Type.SWITCH, Mac, Mac, configureNodes);
+                        /*para ahorrar tiempo ahora comprobamos sus puertos*/
+                        checkportofdevice(dpsv, dsv, Packet_dht, uri, pos);
+                    } catch (Exception e) {
+                        log.error("UAH->HDDP->ERROR al crear nuevos dispositivos TYPE_NO_SDN: " + e.getMessage());
+                        return false;
+                    }
+                    break;
+                case TYPE_SDN_NO_CONFIG:
+                    try {
+                        uri = CreateorUpdateDevice(dpsv, dpr, "sdn", "1.0.0",
+                                Mac, "Switch SDN using autoconfig process", Device.Type.SWITCH, Mac, Mac, configureNodes);
+                        //para ahorrar tiempo ahora comprobamos sus puertos
+                        checkportofdevice(dpsv, dsv, Packet_dht, uri, pos);
+                    } catch (Exception e) {
+                        log.error("UAH->HDDP->ERROR al crear nuevos dispositivos TYPE_SDN_NO_CONFIG: " + e.getMessage());
+                        return false;
+                    }
+                    //return true; /* No hacemos nada por ahora*/
+                    break;
+                default: /** Si tenemos un sensor y permitimos la conexiones entre sensores */
+                    /** Debemos actualizar los dispositivos siempre */
+                    try {
+                        uri = CreateorUpdateDevice(dpsv, dpr, TYPE_SENSORS[type_device[pos] - 4] + " Sensor", "1.0.1",
+                                Mac, "Sensor", Device.Type.OTHER, Mac, Mac, configureNodes);
+                        checkportofdevice(dpsv, dsv, Packet_dht, uri, pos);
+                    } catch (Exception e) {
+                        log.error("UAH->HDDP-> ERROR al crear nuevos sensores : " + e.getMessage());
+                        return false;
+                    }
+                    break;
             }
         }
-
         return true;
+    }
+
+    public String str_to_id(String data){
+        int len = data.length();
+        String aux = "";
+        for (int i= 0; i < (16 - len); i++){
+            aux += "0";
+        }
+        aux+=data;
+        return aux;
     }
 
     /** Comprueba que todos los puertos existen y si alguno no existe lo crea
@@ -162,10 +200,11 @@ public class DHTproviderdevices implements DeviceProvider {
         for (int pos = 0; pos < Packet_dht.getNumHops(); pos++){
             switch(type_device[pos])
             {
-                case 1: /* SDN case */
+                case TYPE_SDN: /* SDN case */
+                case TYPE_SDN_NO_CONFIG:
                     Nom_URI = "of:"+parser_idpacket_to_iddevice(Packet_dht.getidmacdevices()[pos]);
                     break;
-                case 2:
+                case TYPE_NO_SDN:
                     Nom_URI = "sw:"+Long.toHexString(Packet_dht.getidmacdevices()[pos]);
                     break;
                 default: /* Sensor case, only when we can connect two sensor between them*/

@@ -1,13 +1,16 @@
 package DHTapp;
 
+import org.onlab.graph.BellmanFordGraphSearch;
 import org.onlab.packet.BasePacket;
 import java.util.Arrays;
+import java.util.BitSet;
 import org.onlab.packet.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static org.onlab.packet.PacketUtils.checkInput;
+
 
 /**
  * @brief Paquete propio para el descubrimiento de topologias hibridas
@@ -27,18 +30,28 @@ public class DHTpacket extends BasePacket {
         /** @brief Numero máximo de elementos posibles en un paquete */
         static public final short DHT_MAX_ELEMENT = (short)31;
         /** @brief Tamaño maximo de un paquete (ojo que me lo devuelve en bit) */
-        static public final short DHT_PACKET_SIZE =
-                ((6*Byte.SIZE)+ (6*Byte.SIZE)+ (6*Byte.SIZE) + (2*Short.SIZE) + (Integer.SIZE) + (Long.SIZE) + (Long.SIZE) +
+        static private short DHT_PACKET_SIZE =
+                (Byte.SIZE + Byte.SIZE + Byte.SIZE + Long.SIZE + Byte.SIZE + 6*Byte.SIZE + Long.SIZE +
+                        6*Byte.SIZE + 6*Byte.SIZE + Integer.SIZE + //parte debug
+                        ((Byte.SIZE + Short.SIZE + Long.SIZE + Integer.SIZE + Integer.SIZE) * DHT_MAX_ELEMENT))/8;
+                /*((6*Byte.SIZE)+ (6*Byte.SIZE)+ (6*Byte.SIZE) + (2*Short.SIZE) + (Integer.SIZE) + (Long.SIZE) + (Long.SIZE) +
                         ((Short.SIZE + (2*Integer.SIZE) + Long.SIZE + Byte.SIZE) * DHT_MAX_ELEMENT))/8;
 
         /** @brief Campos del paquete */
-        private MacAddress Mac_ant, Last_mac, Src_mac;
-        private short Opcode, Num_hops, Type_devices[];
+        private byte Mac_ant[], Last_mac[], Src_mac[];
+        private short Type_devices[];
         private int outports[], inports[], Time_block;
-        private byte bidirectional[];
+        private BitSet Flags = new BitSet(), Version = new BitSet();
+        private byte configuration[];
+        private byte Opcode, Num_hops, Previous_MAC_Length;
         private long id_mac_devices[], Num_Sec, Num_Ack;
 
     /** Metodos de la clase */
+    private static short set_Packet_Size (short num_devices){
+        return (short)((Byte.SIZE + Byte.SIZE + Byte.SIZE + Long.SIZE + Byte.SIZE + 6*Byte.SIZE + Long.SIZE +
+                        6*Byte.SIZE + 6*Byte.SIZE + Integer.SIZE + //parte debug
+                        ((Byte.SIZE + Short.SIZE + Long.SIZE + Integer.SIZE + Integer.SIZE) * num_devices))/8);
+    }
 
     /** @brief Constructor por defecto */
     public DHTpacket() {
@@ -59,12 +72,13 @@ public class DHTpacket extends BasePacket {
      * @param outports: Array con los puertos de salida
      * @param inports: Array con los puertos de entrada
      * @param id_mac_devices: Array con los ID de los dispositivos por los que pasa
-     * @param bidirectional: Array indicar si la conexión con el anterior es bidireccional
+     * @param configuration: Array para indicar las configuraciones de cada tupla (incluido la bidireccionalidad)
      * @param Num_ack: Número aleatorio para saber que elemento se confirma
      * @return objeto de la clase DHTpacket
      */
-    public DHTpacket(MacAddress Mac_ant, MacAddress Last_mac, MacAddress Src_mac, short Opcode, short Num_hops, int Time_block, long Num_Sec, long Num_ack,
-                     short Type_devices[], int outports[], int inports[], long id_mac_devices[], byte bidirectional[] ) {
+    public DHTpacket(byte[] Mac_ant, byte[] Last_mac, byte[] Src_mac, byte Opcode, byte Num_hops, int Time_block, long Num_Sec, long Num_ack,
+                     short Type_devices[], int outports[], int inports[], long id_mac_devices[], BitSet Version,
+                     BitSet Flags, byte Previous_MAC_Length, byte configuration [] ) {
         this.Mac_ant = Mac_ant;
         this.Last_mac = Last_mac;
         this.Src_mac = Src_mac;
@@ -76,29 +90,39 @@ public class DHTpacket extends BasePacket {
         this.id_mac_devices = id_mac_devices;
         this.inports = inports;
         this.outports = outports;
-        this.bidirectional = bidirectional;
+        this.configuration = configuration;
         this.Num_Ack = Num_ack;
+        /** New version of frame */
+        this.Version = Version;
+        this.Flags = Flags;
+        this.Previous_MAC_Length = Previous_MAC_Length;
     }
     /**
      * @brief Obtiene la mac anterior (esto en el controller no vale de nada XD
      *
-     * @return short Mac_ant
+     * @return byte[] Mac_ant
      */
-    public MacAddress getMacAnt() { return Mac_ant; }
+    public MacAddress getMacAnt() {
+        return MacAddress.valueOf(Mac_ant);
+    }
 
     /**
      * @brief Obtiene la última mac que actualiza el paquete (esto en el controller no vale de nada XD
      *
-     * @return short Last_mac
+     * @return byte[] Last_mac
      */
-    public MacAddress getLastMac() { return Last_mac; }
+    public MacAddress getLastMac() {
+        return MacAddress.valueOf(Last_mac);
+    }
 
     /**
      * @brief Obtiene la mac que crea el paquete
      *
-     * @return short Src_mac
+     * @return byte[] Src_mac
      */
-    public MacAddress getSrcMac() { return Src_mac; }
+    public MacAddress getSrcMac() {
+        return MacAddress.valueOf(Src_mac);
+    }
 
     /**
      * @brief Obtiene el valor del timeblock.. no vale de nada
@@ -121,9 +145,9 @@ public class DHTpacket extends BasePacket {
     /**
      * @brief Obtiene el Option code del paquete
      *
-     * @return short Opcode
+     * @return byte Opcode
      */
-    public short getOpcode() {
+    public byte getOpcode() {
         return Opcode;
     }
 
@@ -132,7 +156,7 @@ public class DHTpacket extends BasePacket {
      *
      * @return short Num_devices
      */
-    public short getNumHops() { return Num_hops; }
+    public byte getNumHops() { return Num_hops; }
 
     /**
      * @brief Obtiene un array con todos los tipos de dispositivos que lleva el paquete
@@ -169,14 +193,7 @@ public class DHTpacket extends BasePacket {
     public long [] getidmacdevices() {
         return id_mac_devices;
     }
-    /**
-     * @brief Obtiene un array indicando si los enlaces son válidos en los dos sentidos
-     *
-     * @return long [] bidirectional
-     */
-    public byte [] getbidirectional() {
-        return bidirectional;
-    }
+
     /**
      * @brief obtiene el valor Num_ack del paquete
      *
@@ -186,7 +203,69 @@ public class DHTpacket extends BasePacket {
     public long getNum_ack() {
         return Num_Ack;
     }
+    /**
+     * @brief obtiene el valor Flags del paquete
+     *
+     * @return BitSet Flags
+     */
+    public BitSet getFlags() { return Flags;}
+    /**
+     * @brief obtiene el valor Version del paquete
+     *
+     * @return BitSet Version
+     */
+    public BitSet getVersion() { return Version;}
+    /**
+     * @brief obtiene el valor configuration del paquete
+     *
+     * @return BitSet [] configuration
+     */
+    public byte [] getconfiguration() { return configuration;}
 
+    /**
+     * @brief obtiene el valor Device_type_len del paquete
+     *
+     * @return BitSet [] Device_type_len
+     */
+    public int getDevice_type_len(int pos) {
+        return ((configuration[pos] & 0b11000000) << 6) +1;
+    }
+
+    /**
+     * @brief obtiene el valor Device_id_len del paquete
+     *
+     * @return int Device_id_len
+     */
+    public int getDevice_id_len(int pos) {
+        return ((configuration[pos] & 0b00111000) << 3) +1;
+    }
+    /**
+     * @brief obtiene el valor port_len del paquete
+     *
+     * @return int port_len
+     */
+    public int getport_len(int pos) {
+        return ((configuration[pos] & 0b00000110) << 1) +1;
+    }
+
+    /**
+     * @brief obtiene el valor port_len del paquete
+     *
+     * @return boolean bidirectional field
+     */
+    public boolean getbidirectional(int pos) {
+        if ((configuration[pos] & 0b00000001) == 1)
+            return true;
+        else
+            return false;
+    }
+
+    /**
+     * @brief obtiene el valor Previous_MAC_Length del paquete
+     *
+     * @return byte Previous_MAC_Length
+     */
+    public byte getPrevious_MAC_Length(){return Previous_MAC_Length;}
 
     /**
      * @brief Indica si un objeto es "igual que" este objeto, comparando todos sus elementos
@@ -242,10 +321,52 @@ public class DHTpacket extends BasePacket {
         if (this.Num_Ack != other.Num_Ack){
             return false;
         }
-        if (this.bidirectional != other.bidirectional){
+        if (this.configuration != other.configuration){
             return false;
         }
+        if ( this.Version != other.Version){
+            return false;
+        }
+        if ( this.Flags != other.Flags){
+            return false;
+        }
+        if ( this.Previous_MAC_Length != other.Previous_MAC_Length){
+            return false;
+        }
+
         return true;
+    }
+
+    private byte BitSet_To_Byte(BitSet vector_1, BitSet vector_2) {
+        BitSet vector_1_clone = (BitSet)vector_1.clone();
+
+        int n = vector_1_clone.length();//_desired length of the first (leading) vector
+        int index = -1;
+        while (index < (vector_2.length() - 1)) {
+            index = vector_2.nextSetBit((index + 1));
+            vector_1_clone.set((index + n));
+        }
+        return vector_1_clone.toByteArray()[0];
+    }
+
+    private byte BitSet_To_Byte(BitSet vector_1, BitSet vector_2, BitSet vector_3, BitSet vector_4) {
+        BitSet vector_1_aux = (BitSet)vector_1.clone();
+
+        int n = vector_1_aux.length();//_desired length of the first (leading) vector
+        int index = -1;
+        while (index < (vector_2.length() - 1)) {
+            index = vector_2.nextSetBit((index + 1));
+            vector_1_aux.set((index + n));
+        }
+        while (index < (vector_3.length() - 1)) {
+            index = vector_3.nextSetBit((index + 1));
+            vector_1_aux.set((index + n));
+        }
+        while (index < (vector_4.length() - 1)) {
+            index = vector_4.nextSetBit((index + 1));
+            vector_1_aux.set((index + n));
+        }
+        return vector_1_aux.toByteArray()[0];
     }
 
     /**
@@ -255,45 +376,45 @@ public class DHTpacket extends BasePacket {
      */
     @Override
     public byte[] serialize() {
-        int length = DHT_PACKET_SIZE;
-
         /** Creamos buffer para serializar */
-        final byte[] data = new byte[length];
+        final byte[] data = new byte[set_Packet_Size (this.Num_hops)];
 
         /** Envolvemos el buffer para que sea mas facil serializar */
         final ByteBuffer bb = ByteBuffer.wrap(data);
 
-        /**Serializamos campo MAC anterior*/
-        bb.put(this.Mac_ant.toBytes());
-
-        /**Serializamos campo MAC anterior*/
-        bb.put(this.Last_mac.toBytes());
-
-        /**Serializamos campo MAC anterior*/
-        bb.put(this.Src_mac.toBytes());
+        /** Serializamos Flags and version */
+        bb.put(BitSet_To_Byte(this.Flags, this.Version));
 
         /** Serializamos campo source device id */
-        bb.putShort(this.Opcode);
+        bb.put(this.Opcode);
 
         /** Serializamos campo Num Devices device id */
-        bb.putShort(this.Num_hops);
-
-        /**Serializamos Campos Time Block */
-        bb.putInt(this.Time_block);
+        bb.put(this.Num_hops);
 
         /**Serializamos Campo Num Sec */
         bb.putLong(this.Num_Sec);
 
+        /** Serializamos campo Previous_MAC_Length device id */
+        bb.put(this.Previous_MAC_Length);
+
+        /**Serializamos campo MAC anterior*/
+        bb.put(this.Mac_ant);
+
         /**serializamos el campo Num_Ack) */
         bb.putLong(this.Num_Ack);
 
+        /**Serializamos campo MAC anterior*/
+        bb.put(this.Last_mac); //debug field
+
+        /**Serializamos campo MAC anterior*/
+        bb.put(this.Src_mac); //debug field
+
+        /**Serializamos Campos Time Block */
+        bb.putInt(this.Time_block); //debug field
 
         /** Serializamos el array de datos Tipo, Id, In_port, Out_port */
-        set_array_buffer(bb, Type_devices, this.Num_hops);
-        set_array_buffer(bb, id_mac_devices, this.Num_hops);
-        set_array_buffer(bb, inports, this.Num_hops);
-        set_array_buffer(bb, outports, this.Num_hops);
-        set_array_buffer(bb, bidirectional, this.Num_hops);
+        set_array_dev_buffer(bb, this.configuration, this.Type_devices, this.id_mac_devices, this.inports,
+                this.outports, this.Num_hops);
 
         /** Devolvemos los datos serializados */
         return data;
@@ -311,28 +432,52 @@ public class DHTpacket extends BasePacket {
 
         final ByteBuffer bb = ByteBuffer.wrap(data, offset, size);
 
-        /**sacamos campo MAC_ANT*/
-        this.Mac_ant = new MacAddress(get_array_buffer_byte(bb,6));
-        /**sacamos campo Last Mac*/
-        this.Last_mac = new MacAddress(get_array_buffer_byte(bb,6));
-        /**sacamos campo Scr Mac*/
-        this.Src_mac = new MacAddress(get_array_buffer_byte(bb,6));
+        /** Sacamos el primer byte (Flags and Version) */
+        BitSet aux_BitSet = BitSet.valueOf(new byte[] { bb.get() });
+        this.Flags = BitSet_split_vars(aux_BitSet, 7, 4);
+        this.Version = BitSet_split_vars(aux_BitSet, 3, 0);
+
         /** sacamos el campo Opcode */
-        this.Opcode = bb.getShort();
+        this.Opcode = bb.get();
+
         /** Sacamos el campo Num_devices */
-        this.Num_hops = bb.getShort();
-        /** Sacamos el campo time block */
-        this.Time_block = bb.getInt();
+        this.Num_hops = bb.get();
+
         /** Sacamos el campo Num Secuence */
         this.Num_Sec = bb.getLong();
-        /** Sacamos el campo Num ACK */
+
+        /** Serializamos campo Previous_MAC_Length device id */
+        this.Previous_MAC_Length = bb.get();
+
+        /**Serializamos campo MAC anterior*/
+        this.Mac_ant = get_array_buffer_byte(bb,this.Previous_MAC_Length);
+
+        /**serializamos el campo Num_Ack) */
         this.Num_Ack = bb.getLong();
-        /** Sacamos los datos pertenecientes a los diferentes arrays */
-        this.Type_devices = get_array_buffer_short(bb);
-        this.id_mac_devices = get_array_buffer_long(bb);
-        this.inports = get_array_buffer_int(bb);
-        this.outports = get_array_buffer_int(bb);
-        this.bidirectional = get_array_buffer_byte(bb, DHT_MAX_ELEMENT);
+
+        /**Serializamos campo MAC anterior*/
+        this.Last_mac = get_array_buffer_byte(bb,this.Previous_MAC_Length); //debug field
+
+        /**Serializamos campo MAC anterior*/
+        this.Src_mac= get_array_buffer_byte(bb,this.Previous_MAC_Length); //debug field
+
+        /**Serializamos Campos Time Block */
+        this.Time_block = bb.getInt(); //debug field
+
+        this.configuration = new byte[this.Num_hops];
+        this.Type_devices = new short[this.Num_hops];
+        this.id_mac_devices = new long[this.Num_hops];
+        this.inports = new int[this.Num_hops];
+        this.outports = new int[this.Num_hops];
+
+        for (int pos = 0; pos < this.Num_hops; pos++){
+            /** Sacamos los datos pertenecientes a los diferentes arrays */
+            this.configuration[pos] = bb.get();
+            this.Type_devices[pos] = get_Type_device_frame(bb, this.getDevice_type_len(pos));
+            this.id_mac_devices[pos] = get_id_mac_device_frame(bb, this.getDevice_id_len(pos));
+            this.inports[pos] = get_port_frame(bb, this.getport_len(pos));
+            this.outports[pos] = get_port_frame(bb, this.getport_len(pos));
+        }
 
         return this;
     }
@@ -346,179 +491,205 @@ public class DHTpacket extends BasePacket {
     public static Deserializer<DHTpacket> deserializer() {
         return (data, offset, length) -> {
 
-            checkInput(data, offset, length, DHT_PACKET_SIZE);
+            checkInput(data, offset, length, 61);
             final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);
             /** Creamos la clase para ser rellenada */
             DHTpacket packet = new DHTpacket();
-            /**sacamos el campo MAC ANT */
-            packet.Mac_ant = new MacAddress(get_array_buffer_byte(bb,6));
-            /**sacamos el campo Last Mac */
-            packet.Last_mac = new MacAddress(get_array_buffer_byte(bb,6));
-            /**sacamos el campo Scr Mac */
-            packet.Src_mac = new MacAddress(get_array_buffer_byte(bb,6));
+            /** Sacamos el primer byte (Flags and Version) */
+            BitSet aux_BitSet = BitSet.valueOf(new byte[] { bb.get() });
+            packet.Flags = packet.BitSet_split_vars(aux_BitSet, 7, 4);
+            packet.Version = packet.BitSet_split_vars(aux_BitSet, 3, 0);
+
             /** sacamos el campo Opcode */
-            packet.Opcode = bb.getShort();
+            packet.Opcode = bb.get();
+
             /** Sacamos el campo Num_devices */
-            packet.Num_hops = bb.getShort();
-            /** sacamos Time Block */
-            packet.Time_block = bb.getInt();
-            /**sacamos num Sec */
+            packet.Num_hops = bb.get();
+
+            /** Sacamos el campo Num Secuence */
             packet.Num_Sec = bb.getLong();
-            /**sacamos num ACK */
+
+            /** Serializamos campo Previous_MAC_Length device id */
+            packet.Previous_MAC_Length = bb.get();
+
+            /**Serializamos campo MAC anterior*/
+            packet.Mac_ant = get_array_buffer_byte(bb,packet.Previous_MAC_Length);
+
+            /**serializamos el campo Num_Ack) */
             packet.Num_Ack = bb.getLong();
-            /** Sacamos los datos pertenecientes a los diferentes arrays */
-            packet.Type_devices = get_array_buffer_short(bb);
-            packet.id_mac_devices = get_array_buffer_long(bb);
-            packet.inports = get_array_buffer_int(bb);
-            packet.outports = get_array_buffer_int(bb);
-            packet.bidirectional = get_array_buffer_byte(bb,DHT_MAX_ELEMENT);
+
+            /**Serializamos campo MAC anterior*/
+            packet.Last_mac = get_array_buffer_byte(bb,packet.Previous_MAC_Length); //debug field
+
+            /**Serializamos campo MAC anterior*/
+            packet.Src_mac= get_array_buffer_byte(bb,packet.Previous_MAC_Length); //debug field
+
+            /**Serializamos Campos Time Block */
+            packet.Time_block = bb.getInt(); //debug field
+
+            packet.configuration = new byte[packet.Num_hops];
+            packet.Type_devices = new short[packet.Num_hops];
+            packet.id_mac_devices = new long[packet.Num_hops];
+            packet.inports = new int[packet.Num_hops];
+            packet.outports = new int[packet.Num_hops];
+
+
+            for (int pos = 0; pos < packet.Num_hops; pos++){
+                /** Sacamos los datos pertenecientes a los diferentes arrays */
+                packet.configuration[pos] = bb.get();
+                packet.Type_devices[pos] = get_Type_device_frame(bb, packet.getDevice_type_len(pos));
+                packet.id_mac_devices[pos] = get_id_mac_device_frame(bb, packet.getDevice_id_len(pos));
+                packet.inports[pos] = get_port_frame(bb, packet.getport_len(pos));
+                packet.outports[pos] = get_port_frame(bb, packet.getport_len(pos));
+            }
 
             return packet;
         };
     }
 
+    public BitSet BitSet_split_vars(BitSet data, int pos_init, int pos_end){
+        BitSet result = new BitSet ();
+        int pos = 0; /* Variable para posicionar los valores en el resultado de forma correcta*/
+
+        for (int i = pos_init; i < pos_end; i ++){
+            if (data.get(i) == true)
+                result.set(pos,true);
+            else
+                result.set(pos,false);
+            pos ++;
+        }
+
+        return result;
+
+    }
+
     @Override
     public String toString() {
         return toStringHelper(getClass())
-                .add("MAC_Ant", this.Mac_ant.toString())
-                .add("Lst_MAC", this.Last_mac.toString())
-                .add("Scr_Mac", this.Src_mac.toString())
+                .add("Version", this.Version.toString())
+                .add("Flags", this.Flags.toString())
                 .add("OpCode", String.valueOf(this.Opcode))
                 .add("Num Devices",  String.valueOf(this.Num_hops))
-                .add("Time Block", String.valueOf(this.Time_block))
                 .add("Num Sec", String.valueOf(this.Num_Sec))
+                .add("Previous_MAC_Length",String.valueOf(this.Previous_MAC_Length))
+                .add("MAC_Ant", this.Mac_ant.toString())
                 .add("Num Ack", String.valueOf(this.Num_Ack))
+                .add("Lst_MAC", this.Last_mac.toString())
+                .add("Scr_Mac", this.Src_mac.toString())
+                .add("Time Block", String.valueOf(this.Time_block))
+                .add("Configuration", Arrays.toString(this.configuration))
                 .add("Type Devices", Arrays.toString(Type_devices))
                 .add("Id Mac Devices", Arrays.toString(id_mac_devices))
                 .add("In Ports", Arrays.toString(inports))
                 .add("Out Ports", Arrays.toString(outports))
-                .add("bidirectional", Arrays.toString(bidirectional))
                 .toString();
     }
 
-    /** @brief introduce los datos en el buffer
-     *
-     * @param bb buffer
-     * @param data datos
-     * @param num_element numero de elementos a introducir en el buffer
-     */
-    public void set_array_buffer (ByteBuffer bb, short data [], int num_element) {
-        for(int pos = 0; pos < DHT_MAX_ELEMENT; pos ++) {
-            if (pos < num_element){
-                /** Introducimos los datos en el paquete */
-                bb.putShort(data[pos]);
-            }
-            else{
-                /** Si ya hemos metido todos los elementos relleno con 0 */
-                bb.putShort((short)0);
-            }
+    public static short get_Type_device_frame (ByteBuffer bb, int len){
+        short type_device = 0;
+        switch (len){
+            case 0:
+                type_device = 0;
+                break;
+            case 1:
+                type_device = (short) bb.get();
+                break;
+            default:
+                type_device = (short) bb.getShort();
+                break;
         }
+
+        return type_device;
+    }
+
+    public static int get_port_frame (ByteBuffer bb, int len) {
+        int port = 0;
+        switch (len) {
+            /* Son casos teoricamente imposibles... pero por si acaso*/
+            case 0:
+            case 3:
+                port = 0;
+                break;
+            case 1:
+                port = (int) bb.get();
+                break;
+            case 2:
+                port = (int) bb.getShort();
+                break;
+            default:
+                port = (int) bb.getInt();
+                break;
+        }
+        return port;
+    }
+
+    public static long get_id_mac_device_frame (ByteBuffer bb, int len){
+        long id_mac_device = 0;
+        switch (len){
+            /* Son casos teoricamente imposibles... pero por si acaso*/
+            case 0:
+            case 3:
+                id_mac_device = 0;
+                break;
+            case 1:
+                id_mac_device = (long) bb.get();
+                break;
+            case 2:
+                id_mac_device = (long) bb.getShort();
+                break;
+            case 4:
+                id_mac_device = (long) bb.getInt();
+                break;
+            default:
+                id_mac_device = (long) bb.getLong();
+                break;
+        }
+
+        return id_mac_device;
     }
 
     /** @brief introduce los datos en el buffer
      *
      * @param bb buffer
-     * @param data datos
+     * @param configuration datos
+     * @param Type_devices datos
+     * @param id_mac_devices datos
+     * @param inport datos
+     * @param outport datos
      * @param num_element numero de elementos a introducir en el buffer
      */
-    public void set_array_buffer (ByteBuffer bb, int data [], int num_element) {
-        for(int pos = 0; pos < DHT_MAX_ELEMENT; pos ++) {
-            if (pos < num_element){
-                /** Introducimos los datos en el paquete */
-                bb.putInt(data[pos]);
-            }
-            else{
-                /** Si ya hemos metido todos los elementos relleno con 0 */
-                bb.putInt(0);
-            }
+    public void set_array_dev_buffer (ByteBuffer bb, byte configuration[], short Type_devices [],
+                                      long id_mac_devices [], int inport [], int outport [], int num_element) {
+        for(int pos = 0; pos < num_element; pos ++) {
+            bb.put(configuration[pos]);
+            bb.putShort(Type_devices[pos]);
+            bb.putLong(id_mac_devices[pos]);
+            bb.putInt(inport[pos]);
+            bb.putInt(outport[pos]);
         }
+
+    }
+    public static long bytesToLong(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+        buffer.put(bytes);
+        buffer.flip();//need flip
+        return buffer.getLong();
     }
 
-    /** @brief introduce los datos en el buffer
-     *
-     * @param bb buffer
-     * @param data datos
-     * @param num_element numero de elementos a introducir en el buffer
-     */
-    public void set_array_buffer(ByteBuffer bb, long data [], int num_element) {
-        for(int pos = 0; pos < DHT_MAX_ELEMENT; pos ++) {
-            if (pos < num_element){
-                /** Introducimos los datos en el paquete */
-                bb.putLong(data[pos]);
-            }
-            else{
-                /** Si ya hemos metido todos los elementos relleno con 0 */
-                bb.putLong(0);
-            }
-        }
+    public static int bytesToInt(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
+        buffer.put(bytes);
+        buffer.flip();//need flip
+        return buffer.getInt();
     }
 
-    /** @brief introduce los datos en el buffer
-     *
-     * @param bb buffer
-     * @param data datos
-     * @param num_element numero de elementos a introducir en el buffer
-     */
-    public void set_array_buffer(ByteBuffer bb, byte data [], int num_element) {
-        for(int pos = 0; pos < DHT_MAX_ELEMENT; pos ++) {
-            if (pos < num_element){
-                /** Introducimos los datos en el paquete */
-                bb.put(data[pos]);
-            }
-            else{
-                /** Si ya hemos metido todos los elementos relleno con 0 */
-                bb.put((byte)0);
-            }
-        }
+    public static short bytesToShort(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.allocate(Short.BYTES);
+        buffer.put(bytes);
+        buffer.flip();//need flip
+        return buffer.getShort();
     }
 
-    /** @brief obtiene los datos del buffer
-     *
-     * @param bb buffer
-     * @return devuelve un array de datos tipo int
-     */
-    public static int [] get_array_buffer_int(ByteBuffer bb) {
-        int data_recovery [] = new int[DHT_MAX_ELEMENT];
-
-        for(int pos = 0; pos < DHT_MAX_ELEMENT; pos ++) {
-            data_recovery[pos] = bb.getInt();
-        }
-        return data_recovery;
-    }
-
-    /** @brief obtiene los datos del buffer
-     *
-     * @param bb buffer
-     * @return devuelve un array de datos tipo long
-     */
-    public static long [] get_array_buffer_long(ByteBuffer bb) {
-        long data_recovery [] = new long[DHT_MAX_ELEMENT];
-
-        for(int pos = 0; pos < DHT_MAX_ELEMENT; pos ++) {
-            data_recovery[pos] = bb.getLong();
-        }
-        return data_recovery;
-    }
-
-    /** @brief obtiene los datos del buffer
-     *
-     * @param bb buffer
-     * @return devuelve un array de datos tipo short
-     */
-    public static short[] get_array_buffer_short(ByteBuffer bb){
-        short data_recovery [] = new short[DHT_MAX_ELEMENT];
-
-        for(int pos = 0; pos < DHT_MAX_ELEMENT; pos ++) {
-            data_recovery[pos] = bb.getShort();
-        }
-        return data_recovery;
-    }
-
-    /** @brief obtiene los datos del buffer
-     *
-     * @param bb buffer
-     * @return devuelve un array de datos tipo byte
-     */
     public static byte[] get_array_buffer_byte(ByteBuffer bb, int num_bytes){
         byte data_recovery [] = new byte[num_bytes];
 
